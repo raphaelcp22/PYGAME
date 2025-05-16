@@ -6,12 +6,31 @@ pygame.init()
 # Dimensões
 WIDTH, HEIGHT = 800, 600
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
-pygame.display.set_caption("Formula Insper - Dia 1")
+pygame.display.set_caption("Formula Insper")
 clock = pygame.time.Clock()
 
-# Jogador (placeholder)
-player = pygame.Rect(WIDTH//2, HEIGHT//2, 40, 20)
-player_speed = 5
+# Classe do Jogador
+class Player:
+    def __init__(self, x, y):
+        self.rect = pygame.Rect(x, y, 40, 20)
+        self.speed = 5
+        self.color = (255, 0, 0)  # Vermelho
+
+    def update(self, keys):
+        if keys[pygame.K_LEFT]:
+            self.rect.x -= self.speed
+        if keys[pygame.K_RIGHT]:
+            self.rect.x += self.speed
+        if keys[pygame.K_UP]:
+            self.rect.y -= self.speed
+        if keys[pygame.K_DOWN]:
+            self.rect.y += self.speed
+
+    def draw(self, surface):
+        pygame.draw.rect(surface, self.color, self.rect)
+
+# Instancia o jogador
+player = Player(WIDTH // 2, HEIGHT // 2)
 
 def main():
     while True:
@@ -20,22 +39,12 @@ def main():
                 pygame.quit()
                 sys.exit()
 
-        # Pega teclas pressionadas
         keys = pygame.key.get_pressed()
-        if keys[pygame.K_LEFT]:
-            player.x -= player_speed
-        if keys[pygame.K_RIGHT]:
-            player.x += player_speed
-        if keys[pygame.K_UP]:
-            player.y -= player_speed
-        if keys[pygame.K_DOWN]:
-            player.y += player_speed
+        player.update(keys)
 
-        # Desenha fundo e "carro"
-        screen.fill((30, 30, 30))
-        pygame.draw.rect(screen, (255, 0, 0), player)
-        
-        # Atualiza tela
+        screen.fill((30, 30, 30))  # Fundo escuro
+        player.draw(screen)
+
         pygame.display.flip()
         clock.tick(60)
 
