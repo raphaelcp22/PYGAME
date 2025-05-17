@@ -1,52 +1,65 @@
-import pygame
-import sys
+import pygame, sys, math
 
 pygame.init()
 
-# Dimensões
 WIDTH, HEIGHT = 800, 600
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
-pygame.display.set_caption("Formula Insper")
+pygame.display.set_caption("Formula Insper – protótipo 01")
 clock = pygame.time.Clock()
 
-# Classe do Jogador
+GRAY = (60, 60, 60)
+GREEN1, GREEN2 = (34, 177, 76), (40, 200, 80)
+
 class Player:
-    def __init__(self, x, y):
-        self.rect = pygame.Rect(x, y, 40, 20)
-        self.speed = 5
-        self.color = (255, 0, 0)  # Vermelho
+    def __init__(self, x, y, color):
+        self.pos = pygame.Vector2(x, y)
+        self.vel = pygame.Vector2(0, 0)
+        self.angle = 0          # 0° aponta para a direita
+        self.size = (40, 20)
+        self.color = color
+        self.acc = 0.4
+        self.rot_speed = 3
 
     def update(self, keys):
-        if keys[pygame.K_LEFT]:
-            self.rect.x -= self.speed
-        if keys[pygame.K_RIGHT]:
-            self.rect.x += self.speed
-        if keys[pygame.K_UP]:
-            self.rect.y -= self.speed
-        if keys[pygame.K_DOWN]:
-            self.rect.y += self.speed
+        if keys[pygame.K_a]:
+            self.angle += self.rot_speed
+        if keys[pygame.K_d]:
+            self.angle -= self.rot_speed
+        if keys[pygame.K_w]:
+            direction = pygame.Vector2(math.cos(math.radians(-self.angle)),
+                                       math.sin(math.radians(-self.angle)))
+            self.vel += direction * self.acc
+        # atrito
+        self.vel *= 0.98
+        self.pos += self.vel
 
-    def draw(self, surface):
-        pygame.draw.rect(surface, self.color, self.rect)
+    def draw(self, surf):
+        rect = pygame.Rect(0, 0, *self.size)
+        rect.center = self.pos
+        car = pygame.Surface(self.size)
+        car.fill(self.color)
+        rotated = pygame.transform.rotate(car, self.angle)
+        surf.blit(rotated, rotated.get_rect(center=self.pos))
 
-# Instancia o jogador
-player = Player(WIDTH // 2, HEIGHT // 2)
+def draw_grass():
+    cell = 20
+    for y in range(0, HEIGHT, cell):
+        for x in range(0, WIDTH, cell):
+            col = GREEN1 if (x//cell + y//cell) % 2 else GREEN2
+            pygame.draw.rect(screen, col, (x, y, cell, cell))
 
-def main():
-    while True:
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                pygame.quit()
-                sys.exit()
+player = Player(WIDTH/2, HEIGHT/2, (255, 0, 0))
 
-        keys = pygame.key.get_pressed()
-        player.update(keys)
+while True:
+    for e in pygame.event.get():
+        if e.type == pygame.QUIT:
+            pygame.quit(); sys.exit()
 
-        screen.fill((30, 30, 30))  # Fundo escuro
-        player.draw(screen)
+    keys = pygame.key.get_pressed()
+    player.update(keys)
 
-        pygame.display.flip()
-        clock.tick(60)
+    draw_grass()
+    player.draw(screen)
 
-if __name__ == "__main__":
-    main()
+    pygame.display.flip()
+    clock.tick(60)
