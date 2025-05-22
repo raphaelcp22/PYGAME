@@ -1,242 +1,331 @@
 import pygame
 import sys
 import math
+import random
 from pygame.math import Vector2
 
+# incicia o pygame
 pygame.init()
 
-WIDTH, HEIGHT = 800, 600
-screen = pygame.display.set_mode((WIDTH, HEIGHT))
-pygame.display.set_caption("Formula Insper – 2 Player Racing")
+# dimensões da tela
+SCREEN_WIDTH, SCREEN_HEIGHT = 1200, 800
+screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
+pygame.display.set_caption("Pixel Racer Championship")
 clock = pygame.time.Clock()
 
-# Cores
-GRAY = (60, 60, 60)
-GREEN1, GREEN2 = (34, 177, 76), (40, 200, 80)
-RED = (255, 0, 0)
-BLUE = (0, 100, 255)
+
+CELL_SIZE = 10
+COLS, ROWS = SCREEN_WIDTH // CELL_SIZE, SCREEN_HEIGHT // CELL_SIZE
+
+# cores
+GRASS_SHADES = [(34, 177, 76), (30, 150, 60), (40, 200, 80)]
+TRACK_COLOR = (40, 40, 40)
+CURB_COLORS = [(200, 0, 0), (255, 255, 255)]
+CHECKER_RED = (192, 57, 43)
+CHECKER_WHITE = (236, 240, 241)
+BORDER_COLOR = (120, 120, 120)
+
+# geração de tiles de grama
+grass_tiles = []
+for shade in GRASS_SHADES:
+    for _ in range(3):
+        tile = pygame.Surface((CELL_SIZE, CELL_SIZE))
+        tile.fill(shade)
+        for _ in range(int(CELL_SIZE*CELL_SIZE*0.1)):
+            rx = random.randrange(CELL_SIZE)
+            ry = random.randrange(CELL_SIZE)
+            tile.set_at((rx, ry), random.choice(GRASS_SHADES))
+        grass_tiles.append(tile)
+
+# tiles de pista
+track_tiles = []
+for _ in range(2):
+    tile = pygame.Surface((CELL_SIZE, CELL_SIZE))
+    tile.fill(TRACK_COLOR)
+    for _ in range(int(CELL_SIZE*CELL_SIZE*0.02)):
+        rx = random.randrange(CELL_SIZE)
+        ry = random.randrange(CELL_SIZE)
+        delta = random.choice([-5, 5])
+        gray = max(0, min(255, TRACK_COLOR[0] + delta))
+        tile.set_at((rx, ry), (gray, gray, gray))
+    track_tiles.append(tile)
+
+# tiles de borda (NÃO TESTADO AINDA - FAZER PISTA COM BORDAS)
+curb_tile = pygame.Surface((CELL_SIZE, CELL_SIZE))
+for i in range(CELL_SIZE):
+    color = CURB_COLORS[(i // 5) % 2]
+    pygame.draw.line(curb_tile, color, (i, 0), (i, CELL_SIZE-1))
+
+# esvazia tilemap
+
+CELL_SIZE = 10
+COLS = SCREEN_WIDTH // CELL_SIZE
+ROWS = SCREEN_HEIGHT // CELL_SIZE
+
+tilemap = [[0 for _ in range(COLS)] for _ in range(ROWS)]
+grass_map = [[0 for _ in range(COLS)] for _ in range(ROWS)]
+
+# carrega foto da pista
+track_mask = pygame.image.load("track_mask.png").convert()
+track_mask = pygame.transform.scale(track_mask, (COLS, ROWS))
+
+for y in range(ROWS):
+    for x in range(COLS):
+        color = track_mask.get_at((x, y))[:3]
+        if color == (40, 40, 40):        # pista
+            tilemap[y][x] = 1
+        elif color == (34, 177, 76):     # grama
+            tilemap[y][x] = 0
+        elif color == (255, 0, 0):   # borda
+            tilemap[y][x] = 2
+        elif color == (0, 0, 255):       # linha de chegada
+            tilemap[y][x] = 4
+        else:
+            tilemap[y][x] = 0  # outros pixels são considerados grama
+
+        # cria padrão de grama
+        if tilemap[y][x] == 0 or tilemap[y][x] == 2:
+            grass_map[y][x] = random.randrange(len(grass_tiles))
+
+# outras cores
 WHITE = (255, 255, 255)
 BLACK = (0, 0, 0)
-YELLOW = (255, 255, 0)
-TRACK_COLOR = (100, 100, 100)
-GRASS_COLOR = (34, 177, 76)
+RED = (231, 76, 60)
+BLUE = (52, 152, 219)
+YELLOW = (241, 196, 15)
+ORANGE = (255, 165, 0)
+GREEN = (46, 204, 113)
+PURPLE = (155, 89, 182)
 
-class TileMap:
-    def __init__(self, width, height, tile_size=20):
-        self.width = width
-        self.height = height
-        self.tile_size = tile_size
-        self.track_layout = self.generate_track()
-        
-    def generate_track(self):
-        """Gera um layout básico de pista oval"""
-        layout = [[0 for _ in range(self.width // self.tile_size)] 
-                 for _ in range(self.height // self.tile_size)]
-        
-        # Definir área da pista (oval)
-        center_x, center_y = len(layout[0]) // 2, len(layout) // 2
-        radius_x, radius_y = center_x - 5, center_y - 5
-        
-        for y in range(len(layout)):
-            for x in range(len(layout[0])):
-                # Fórmula de elipse para criar pista oval
-                if ((x - center_x) ** 2 / radius_x ** 2 + 
-                    (y - center_y) ** 2 / radius_y ** 2) <= 1:
-                    layout[y][x] = 1  # 1 representa a pista
-                    
-        return layout
-    
-    def is_on_track(self, pos):
-        """Verifica se uma posição está na pista"""
-        tile_x = int(pos.x // self.tile_size)
-        tile_y = int(pos.y // self.tile_size)
-        
-        if 0 <= tile_x < len(self.track_layout[0]) and 0 <= tile_y < len(self.track_layout):
-            return self.track_layout[tile_y][tile_x] == 1
-        return False
-    
-    def draw(self, surf):
-        """Desenha o tilemap"""
-        for y in range(len(self.track_layout)):
-            for x in range(len(self.track_layout[0])):
-                rect = pygame.Rect(
-                    x * self.tile_size, 
-                    y * self.tile_size, 
-                    self.tile_size, 
-                    self.tile_size
-                )
-                
-                if self.track_layout[y][x] == 1:  # Pista
-                    pygame.draw.rect(surf, TRACK_COLOR, rect)
-                else:  # Grama
-                    pygame.draw.rect(surf, GRASS_COLOR, rect)
-                    
-                # Bordas para visualização (opcional)
-                pygame.draw.rect(surf, BLACK, rect, 1)
+# fontes
+try:
+    font_large = pygame.font.Font('PressStart2P-Regular.ttf', 40)
+    font_medium = pygame.font.Font('PressStart2P-Regular.ttf', 30)
+    font_small = pygame.font.Font('PressStart2P-Regular.ttf', 20)
+    font_tiny = pygame.font.Font('PressStart2P-Regular.ttf', 15)
+    font_huge = pygame.font.Font('PressStart2P-Regular.ttf', 60)
+except:
+    font_large = pygame.font.Font(None, 80)
+    font_medium = pygame.font.Font(None, 60)
+    font_small = pygame.font.Font(None, 40)
+    font_tiny = pygame.font.Font(None, 30)
+    font_huge = pygame.font.Font(None, 100)
 
-class Player:
-    def __init__(self, x, y, color, controls):
-        self.pos = pygame.Vector2(x, y)
-        self.vel = pygame.Vector2(0, 0)
-        self.angle = 0          # 0° points to the right
-        self.size = (40, 20)
-        self.color = color
-        self.acc = 0.4
-        self.reverse_acc = 0.2  # Slower acceleration in reverse
-        self.rot_speed = 3
-        self.controls = controls  # [left, right, accelerate, reverse]
-        self.collision_rect = pygame.Rect(0, 0, *self.size)
-        self.collision_rect.center = self.pos
-        self.collided = False
-        self.collision_timer = 0
-        self.secondary_color = YELLOW if color == RED else WHITE
-        self.is_reversing = False
+# centro da pista
+TRACK_CENTER = (SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2)
+
+class Car(pygame.sprite.Sprite):
+    def __init__(self, x, y, color, controls, player_num):
+        super().__init__()
+        try:
+            self.original_image = self.load_car_image(player_num)
+        except pygame.error as e:
+            print(f"Error loading car image for player {player_num}: {e}")
+            sys.exit(1)
+        self.image = self.original_image
+        self.rect = self.image.get_rect(center=(x, y))
+        self.pos = Vector2(x, y)
+        self.velocity = Vector2(0, 0)
+        self.angle = 0  # para direita
+        self.acceleration = 0.3
+        self.max_speed = 8
+        self.reverse_speed = self.max_speed * 0.5
+        self.friction = 0.05
+        self.rotation_speed = 2.5
+        self.drift_factor = 0.95
+        self.traction = 1.0
+        self.controls = controls
+        self.player_num = player_num
+        self.last_position = Vector2(x, y)
         self.off_track = False
         self.off_track_timer = 0
 
-    def update(self, keys, tilemap):
-        if keys[self.controls[0]]:
-            self.angle += self.rot_speed
-        if keys[self.controls[1]]:
-            self.angle -= self.rot_speed
-            
-        # Forward movement
-        if keys[self.controls[2]]:
-            direction = pygame.Vector2(math.cos(math.radians(-self.angle)),
-                                     math.sin(math.radians(-self.angle)))
-            self.vel += direction * self.acc
-            self.is_reversing = False
-            
-        # Reverse movement
-        if keys[self.controls[3]]:
-            direction = pygame.Vector2(math.cos(math.radians(-self.angle)),
-                                     math.sin(math.radians(-self.angle)))
-            self.vel -= direction * self.reverse_acc
-            self.is_reversing = True
-        
-        # Verificar se está na pista
-        on_track = tilemap.is_on_track(self.pos)
-        
-        # Aplicar atrito diferente dependendo da superfície
-        if on_track:
-            self.vel *= 0.98  # Atrito normal na pista
-            self.off_track = False
+    def load_car_image(self, player_num):
+        """Load car image based on player number."""
+        if player_num == 1:
+            car_image = pygame.image.load('scarlet.png').convert_alpha()
+        elif player_num == 2:
+            car_image = pygame.image.load('navy.png').convert_alpha()
         else:
-            self.vel *= 0.95  # Mais atrito na grama
-            if not self.off_track:
-                self.off_track = True
-                self.off_track_timer = 30
+            raise ValueError("Invalid player number")
+        return pygame.transform.rotate(car_image, -90)
+    
+    def update(self, cars):
+        keys = pygame.key.get_pressed()
         
-        self.pos += self.vel
+        # controles
+        if keys[self.controls['accelerate']]:
+            self.velocity += Vector2(math.cos(math.radians(self.angle)), 
+                                   math.sin(math.radians(self.angle))) * self.acceleration
         
-        # Update collision rectangle
-        self.collision_rect.center = self.pos
+        if keys[self.controls['brake']]:
+            self.velocity -= Vector2(math.cos(math.radians(self.angle)), 
+                                   math.sin(math.radians(self.angle))) * (self.acceleration * 0.8)
         
-        # Manter dentro da tela
-        self.pos.x = max(0, min(WIDTH, self.pos.x))
-        self.pos.y = max(0, min(HEIGHT, self.pos.y))
+        # direção
+        turning = 0
+        if keys[self.controls['left']]:
+            turning += self.rotation_speed * (1 - (0.7 * (self.velocity.length() / self.max_speed)))
+        if keys[self.controls['right']]:
+            turning -= self.rotation_speed * (1 - (0.7 * (self.velocity.length() / self.max_speed)))
         
-        # Collision cooldown
-        if self.collided:
-            self.collision_timer -= 1
-            if self.collision_timer <= 0:
-                self.collided = False
-                
-        # Off-track timer
-        if self.off_track_timer > 0:
-            self.off_track_timer -= 1
+        if self.velocity.length() > 0.5:
+            self.angle += turning * (self.velocity.length() / self.max_speed)
+        
+        # fricção
+        self.velocity *= (1 - self.friction * self.traction)
+        
+        # vel. máxima
+        if self.velocity.length() > self.max_speed:
+            self.velocity.scale_to_length(self.max_speed)
+        
+        # calcula nova posição
+        new_pos = self.pos + self.velocity
+        
+        # sistema de colisão/detecção de pista
+        cell_x = int(new_pos.x / CELL_SIZE)
+        cell_y = int(new_pos.y / CELL_SIZE)
 
-    def draw(self, surf):
-        # Criar superfície para o carro com alpha por pixel
-        car_surface = pygame.Surface(self.size, pygame.SRCALPHA)
+        if (0 <= cell_x < COLS and 0 <= cell_y < ROWS and 
+            tilemap[cell_y][cell_x] in (0, 3)):  # fora da pista
+            self.off_track = True
+            self.off_track_timer += 1
+            self.velocity *= 0.95
+        else:
+            self.off_track = False
+            self.off_track_timer = 0
+
+        self.pos = new_pos
         
-        # Desenhar corpo do carro
-        body_color = self.color
-        if self.off_track_timer > 0 and self.off_track_timer % 10 < 5:
-            body_color = WHITE  # Piscar quando sair da pista
+        self.image = pygame.transform.rotate(self.original_image, -self.angle)
+        self.rect = self.image.get_rect(center=(self.pos.x, self.pos.y))
+    
+    def draw(self, surface):
+        rotated_image = pygame.transform.rotate(self.original_image, -self.angle)
+        rect = rotated_image.get_rect(center=(self.pos.x, self.pos.y))
+        surface.blit(rotated_image, rect)
+
+def draw_track(surface):
+    for y in range(ROWS):
+        for x in range(COLS):
+            tile = tilemap[y][x]
+            if tile == 1:
+                surface.blit(random.choice(track_tiles), (x*CELL_SIZE, y*CELL_SIZE))
+            elif tile == 0:
+                surface.blit(grass_tiles[grass_map[y][x]], (x*CELL_SIZE, y*CELL_SIZE))
+            elif tile == 2:
+                surface.blit(curb_tile, (x*CELL_SIZE, y*CELL_SIZE))
+            elif tile == 4:
+                pygame.draw.rect(surface, (0, 0, 255), (x*CELL_SIZE, y*CELL_SIZE, CELL_SIZE, CELL_SIZE))
+
+def draw_hud(surface, cars):
+    for i, car in enumerate(cars):
+
+        player_text = font_small.render(f"P{car.player_num}", True, WHITE)
+        pos_x = 20 if i == 0 else SCREEN_WIDTH - 120
+        surface.blit(player_text, (pos_x, 20))
+        
+        # indicador de velocidade
+        speed = int(car.velocity.length() * 20)
+        speed_text = font_small.render(f"{speed}KMH", True, WHITE)
+        surface.blit(speed_text, (pos_x, 60))
+
+def draw_intro(surface):
+    # intro screen
+    intro_img = pygame.image.load("intro_screen.png").convert()
+    intro_img = pygame.transform.scale(intro_img, (SCREEN_WIDTH, SCREEN_HEIGHT))
+    surface.blit(intro_img, (0, 0))
+
+def draw_countdown(surface, count):
+
+    overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
+    overlay.fill((0, 0, 0, 150))
+    surface.blit(overlay, (0, 0))
+    
+    if count > 0:
+        count_text = font_huge.render(str(count), True, WHITE)
+        surface.blit(count_text, (SCREEN_WIDTH//2 - count_text.get_width()//2, 
+                                 SCREEN_HEIGHT//2 - count_text.get_height()//2))
+    else:
+        go_text = font_huge.render("GO!", True, GREEN)
+        surface.blit(go_text, (SCREEN_WIDTH//2 - go_text.get_width()//2, 
+                              SCREEN_HEIGHT//2 - go_text.get_height()//2))
+
+def main():
+    game_state = "intro"
+    countdown = 3
+    last_tick = pygame.time.get_ticks()
+    cars = []
+    
+    while True:
+        current_time = pygame.time.get_ticks()
+        
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
             
-        pygame.draw.rect(car_surface, body_color, (0, 0, self.size[0], self.size[1]), border_radius=3)
+            if event.type == pygame.KEYDOWN:
+                if game_state == "intro" and event.key == pygame.K_SPACE:
+                    controls1 = {
+                        'accelerate': pygame.K_w,
+                        'brake': pygame.K_s,
+                        'left': pygame.K_d,
+                        'right': pygame.K_a
+                    }
+                    controls2 = {
+                        'accelerate': pygame.K_UP,
+                        'brake': pygame.K_DOWN,
+                        'left': pygame.K_RIGHT,
+                        'right': pygame.K_LEFT
+                    }
+                    start_y = 160  # ajustar para a pista
+                    car1 = Car(TRACK_CENTER[0] - 60, start_y, RED, controls1, 1)
+                    car2 = Car(TRACK_CENTER[0] + 60, start_y, BLUE, controls2, 2)
+                    cars = [car1, car2]
+                    game_state = "countdown"
+                    last_tick = current_time
+                    countdown = 3
+                
+                elif game_state == "racing":
+                    if event.key == pygame.K_q:
+                        pygame.quit()
+                        sys.exit()
         
-        # Desenhar cockpit/para-brisa
-        pygame.draw.rect(car_surface, BLACK, (10, 5, 20, 10), border_radius=2)
+        if game_state == "countdown":
+            if current_time - last_tick >= 1000:
+                countdown -= 1
+                last_tick = current_time
+                if countdown < 0:
+                    game_state = "racing"
         
-        # Desenhar listras de corrida
-        pygame.draw.line(car_surface, self.secondary_color, (5, 2), (35, 2), 2)
-        pygame.draw.line(car_surface, self.secondary_color, (5, 18), (35, 18), 2)
+        elif game_state == "racing":
+            for car in cars:
+                car.update(cars)
         
-        # Desenhar rodas
-        pygame.draw.ellipse(car_surface, BLACK, (2, 5, 8, 10))
-        pygame.draw.ellipse(car_surface, BLACK, (30, 5, 8, 10))
+        screen.fill(BLACK)
         
-        # Desenhar cubos das rodas e luzes de ré
-        pygame.draw.ellipse(car_surface, self.secondary_color, (5, 8, 4, 4))
-        pygame.draw.ellipse(car_surface, self.secondary_color, (33, 8, 4, 4))
+        if game_state == "intro":
+            draw_intro(screen)
+        else:
+            draw_track(screen)
+            
+            if game_state in ["countdown", "racing"]:
+                for car in cars:
+                    car.draw(screen)
+                    
+            if game_state in ["countdown", "racing"] and cars:
+                draw_hud(screen, cars)
+            
+            if game_state == "countdown":
+                draw_countdown(screen, countdown)
+
+                
+            controls_text = font_tiny.render("WASD/ARROWS TO MOVE", True, WHITE)
+            screen.blit(controls_text, (SCREEN_WIDTH//2 - controls_text.get_width()//2, SCREEN_HEIGHT - 40))
         
-        # Luzes de ré (vermelho quando dando ré)
-        if self.is_reversing:
-            pygame.draw.rect(car_surface, (255, 100, 100), (35, 8, 3, 4))
-        
-        # Rotacionar e desenhar carro
-        rotated_car = pygame.transform.rotate(car_surface, self.angle)
-        surf.blit(rotated_car, rotated_car.get_rect(center=self.pos))
+        pygame.display.flip()
+        clock.tick(60)
 
-def check_collision(player1, player2):
-    if player1.collision_rect.colliderect(player2.collision_rect) and not player1.collided and not player2.collided:
-        player1.vel *= -0.5
-        player2.vel *= -0.5
-        
-        direction = player1.pos - player2.pos
-        if direction.length() > 0:
-            direction = direction.normalize()
-            player1.pos += direction * 5
-            player2.pos -= direction * 5
-        
-        player1.collided = True
-        player2.collided = True
-        player1.collision_timer = 30
-        player2.collision_timer = 30
-
-def draw_ui():
-    font = pygame.font.SysFont('Arial', 24)
-    text1 = font.render(f"RED Car: {int(player1.vel.length() * 10)} km/h", True, WHITE)
-    text2 = font.render(f"BLUE Car: {int(player2.vel.length() * 10)} km/h", True, WHITE)
-    screen.blit(text1, (10, 10))
-    screen.blit(text2, (10, 40))
-    
-    # Adicionar dica de controles
-    controls_font = pygame.font.SysFont('Arial', 16)
-    hint1 = controls_font.render("Player 1: WASD to move, S to reverse", True, WHITE)
-    hint2 = controls_font.render("Player 2: Arrows to move, DOWN to reverse", True, WHITE)
-    screen.blit(hint1, (10, HEIGHT - 40))
-    screen.blit(hint2, (10, HEIGHT - 20))
-
-# Criar tilemap
-tilemap = TileMap(WIDTH, HEIGHT, 20)
-
-# Criar jogadores com controles [esquerda, direita, acelerar, ré]
-player1 = Player(WIDTH/2 - 100, HEIGHT/2, RED, 
-                [pygame.K_a, pygame.K_d, pygame.K_w, pygame.K_s])
-player2 = Player(WIDTH/2 + 100, HEIGHT/2, BLUE,
-                [pygame.K_LEFT, pygame.K_RIGHT, pygame.K_UP, pygame.K_DOWN])
-
-while True:
-    for e in pygame.event.get():
-        if e.type == pygame.QUIT:
-            pygame.quit(); sys.exit()
-
-    keys = pygame.key.get_pressed()
-    player1.update(keys, tilemap)
-    player2.update(keys, tilemap)
-    
-    check_collision(player1, player2)
-
-    # Desenhar tilemap primeiro
-    tilemap.draw(screen)
-    
-    # Depois desenhar os jogadores
-    player1.draw(screen)
-    player2.draw(screen)
-    draw_ui()
-
-    pygame.display.flip()
-    clock.tick(60)
+if __name__ == "__main__":
+    main()
