@@ -4,14 +4,29 @@ import math
 import random
 from pygame.math import Vector2
 
-# incicia o pygame
+# inicia o pygame
 pygame.init()
+
+# inicia o sistema de som
+pygame.mixer.init()
 
 # dimensões da tela
 SCREEN_WIDTH, SCREEN_HEIGHT = 1200, 800
 screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
 pygame.display.set_caption("Pixel Racer Championship")
 clock = pygame.time.Clock()
+
+# carrega sons
+try:
+    engine_sound = pygame.mixer.Sound('engine.wav')  # som do motor
+    crash_sound = pygame.mixer.Sound('crash.wav')    # som de colisão
+    boost_sound = pygame.mixer.Sound('boost.wav')    # som de turbo
+    music = pygame.mixer.music.load('race_music.mp3')  # música de fundo
+    pygame.mixer.music.set_volume(0.5)  # volume mais baixo pra música
+    sound_available = True
+except:
+    sound_available = False
+    print("Arquivos de som não encontrados. Continuando sem som.")
 
 
 CELL_SIZE = 10
@@ -139,19 +154,44 @@ class Car(pygame.sprite.Sprite):
         self.last_position = Vector2(x, y)
         self.off_track = False
         self.off_track_timer = 0
+        self.engine_sound_playing = False  # controle do som do motor
+        self.last_collision_time = 0
+        self.boost = 100  # medidor de turbo
+        self.boosting = False  # se está usando turbo
 
     def load_car_image(self, player_num):
-        """Load car image based on player number."""
+        """Carrega imagem do carro baseado no número do jogador"""
         if player_num == 1:
             car_image = pygame.image.load('scarlet.png').convert_alpha()
         elif player_num == 2:
             car_image = pygame.image.load('navy.png').convert_alpha()
         else:
-            raise ValueError("Invalid player number")
+            raise ValueError("Número de jogador inválido")
         return pygame.transform.rotate(car_image, -90)
     
     def update(self, cars):
         keys = pygame.key.get_pressed()
+        
+        # sistema de som
+        if sound_available:
+            # som do motor - volume varia com velocidade
+            engine_volume = min(0.7, self.velocity.length() / self.max_speed)
+            if engine_volume > 0.1:
+                if not self.engine_sound_playing:
+                    engine_sound.play(-1)  # loop no som
+                    self.engine_sound_playing = True
+                engine_sound.set_volume(engine_volume)
+            else:
+                if self.engine_sound_playing:
+                    engine_sound.stop()
+                    self.engine_sound_playing = False
+            
+            # som do turbo
+            self.boosting = False
+            if keys[self.controls['boost']] and self.boost > 0 and self.velocity.length() > 0:
+                self.boosting = True
+                if random.random() < 0.1:  # toca só as vezes pra não encher
+                    boost_sound.play()
         
         # controles
         if keys[self.controls['accelerate']]:
@@ -161,6 +201,16 @@ class Car(pygame.sprite.Sprite):
         if keys[self.controls['brake']]:
             self.velocity -= Vector2(math.cos(math.radians(self.angle)), 
                                    math.sin(math.radians(self.angle))) * (self.acceleration * 0.8)
+        
+        # turbo
+        if keys[self.controls['boost']] and self.boost > 0:
+            boost_amount = self.acceleration * 1.5
+            self.velocity += Vector2(math.cos(math.radians(self.angle)), 
+                                   math.sin(math.radians(self.angle))) * boost_amount
+            self.boost -= 1.5  # gasta turbo
+            self.boosting = True
+        elif not self.boosting and self.boost < 100:
+            self.boost += 0.2  # recarrega turbo
         
         # direção
         turning = 0
@@ -176,8 +226,8 @@ class Car(pygame.sprite.Sprite):
         self.velocity *= (1 - self.friction * self.traction)
         
         # vel. máxima
-        if self.velocity.length() > self.max_speed:
-            self.velocity.scale_to_length(self.max_speed)
+        if self.velocity.length() > self.max_speed * (1.5 if self.boosting else 1.0):
+            self.velocity.scale_to_length(self.max_speed * (1.5 if self.boosting else 1.0))
         
         # calcula nova posição
         new_pos = self.pos + self.velocity
@@ -190,13 +240,33 @@ class Car(pygame.sprite.Sprite):
             tilemap[cell_y][cell_x] in (0, 3)):  # fora da pista
             self.off_track = True
             self.off_track_timer += 1
-            self.velocity *= 0.95
+            self.velocity *= 0.95  # mais devagar na grama
         else:
             self.off_track = False
             self.off_track_timer = 0
 
         self.pos = new_pos
         
+        # colisão entre carros com som
+        current_time = pygame.time.get_ticks()
+        for car in cars:
+            if (car != self and pygame.sprite.collide_mask(self, car) and 
+                current_time - self.last_collision_time > 500):  # cooldown de 0.5s
+                
+                self.last_collision_time = current_time
+                relative_velocity = self.velocity - car.velocity
+                force = relative_velocity.length() * 0.7
+                
+                if force > 2 and sound_available:  # só toca som se for forte
+                    crash_sound.play()
+                
+                # física da colisão
+                collision_angle = math.atan2(car.pos.y - self.pos.y, car.pos.x - self.pos.x)
+                impulse = Vector2(math.cos(collision_angle), math.sin(collision_angle)) * force
+                self.velocity -= impulse * 0.7
+                car.velocity += impulse * 0.7
+        
+        # atualiza sprite
         self.image = pygame.transform.rotate(self.original_image, -self.angle)
         self.rect = self.image.get_rect(center=(self.pos.x, self.pos.y))
     
@@ -220,7 +290,6 @@ def draw_track(surface):
 
 def draw_hud(surface, cars):
     for i, car in enumerate(cars):
-
         player_text = font_small.render(f"P{car.player_num}", True, WHITE)
         pos_x = 20 if i == 0 else SCREEN_WIDTH - 120
         surface.blit(player_text, (pos_x, 20))
@@ -229,15 +298,21 @@ def draw_hud(surface, cars):
         speed = int(car.velocity.length() * 20)
         speed_text = font_small.render(f"{speed}KMH", True, WHITE)
         surface.blit(speed_text, (pos_x, 60))
+        
+        # medidor de turbo
+        boost_width = int(100 * (car.boost / 100))
+        pygame.draw.rect(surface, (20, 20, 20), (pos_x, 90, 100, 10))
+        pygame.draw.rect(surface, YELLOW, (pos_x, 90, boost_width, 10))
+        pygame.draw.rect(surface, WHITE, (pos_x, 90, 100, 10), 1)
 
 def draw_intro(surface):
-    # intro screen
+    # tela de introdução
     intro_img = pygame.image.load("intro_screen.png").convert()
     intro_img = pygame.transform.scale(intro_img, (SCREEN_WIDTH, SCREEN_HEIGHT))
     surface.blit(intro_img, (0, 0))
 
 def draw_countdown(surface, count):
-
+    # contagem regressiva
     overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
     overlay.fill((0, 0, 0, 150))
     surface.blit(overlay, (0, 0))
@@ -252,6 +327,10 @@ def draw_countdown(surface, count):
                               SCREEN_HEIGHT//2 - go_text.get_height()//2))
 
 def main():
+    # toca música de fundo se disponível
+    if sound_available:
+        pygame.mixer.music.play(-1)  # loop na música
+    
     game_state = "intro"
     countdown = 3
     last_tick = pygame.time.get_ticks()
@@ -262,24 +341,32 @@ def main():
         
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
+                # para todos os sons ao sair
+                if sound_available:
+                    pygame.mixer.music.stop()
+                    engine_sound.stop()
                 pygame.quit()
                 sys.exit()
             
             if event.type == pygame.KEYDOWN:
                 if game_state == "intro" and event.key == pygame.K_SPACE:
+                    # controles do jogador 1 (WASD + Shift)
                     controls1 = {
                         'accelerate': pygame.K_w,
                         'brake': pygame.K_s,
                         'left': pygame.K_d,
-                        'right': pygame.K_a
+                        'right': pygame.K_a,
+                        'boost': pygame.K_LSHIFT
                     }
+                    # controles do jogador 2 (setas + Ctrl)
                     controls2 = {
                         'accelerate': pygame.K_UP,
                         'brake': pygame.K_DOWN,
                         'left': pygame.K_RIGHT,
-                        'right': pygame.K_LEFT
+                        'right': pygame.K_LEFT,
+                        'boost': pygame.K_RCTRL
                     }
-                    start_y = 160  # ajustar para a pista
+                    start_y = 160  # posição inicial na pista
                     car1 = Car(TRACK_CENTER[0] - 60, start_y, RED, controls1, 1)
                     car2 = Car(TRACK_CENTER[0] + 60, start_y, BLUE, controls2, 2)
                     cars = [car1, car2]
@@ -289,9 +376,13 @@ def main():
                 
                 elif game_state == "racing":
                     if event.key == pygame.K_q:
+                        if sound_available:
+                            pygame.mixer.music.stop()
+                            engine_sound.stop()
                         pygame.quit()
                         sys.exit()
         
+        # lógica da contagem regressiva
         if game_state == "countdown":
             if current_time - last_tick >= 1000:
                 countdown -= 1
@@ -299,10 +390,12 @@ def main():
                 if countdown < 0:
                     game_state = "racing"
         
+        # atualiza os carros durante a corrida
         elif game_state == "racing":
             for car in cars:
                 car.update(cars)
         
+        # desenha tudo
         screen.fill(BLACK)
         
         if game_state == "intro":
@@ -314,14 +407,29 @@ def main():
                 for car in cars:
                     car.draw(screen)
                     
+                    # efeito visual do turbo
+                    if car.boosting:
+                        boost_pos = car.pos + Vector2(
+                            math.cos(math.radians(car.angle + 180)) * 35,
+                            math.sin(math.radians(car.angle + 180)) * 35
+                        )
+                        pygame.draw.circle(
+                            screen, 
+                            (255, 200, 100, 180), 
+                            (int(boost_pos.x), int(boost_pos.y)), 
+                            20
+                        )
+            
+            # mostra HUD durante a corrida
             if game_state in ["countdown", "racing"] and cars:
                 draw_hud(screen, cars)
             
+            # mostra contagem regressiva
             if game_state == "countdown":
                 draw_countdown(screen, countdown)
-
-                
-            controls_text = font_tiny.render("WASD/ARROWS TO MOVE", True, WHITE)
+            
+            # instruções de controle
+            controls_text = font_tiny.render("WASD/ARROWS TO MOVE, SHIFT/CTRL TO BOOST", True, WHITE)
             screen.blit(controls_text, (SCREEN_WIDTH//2 - controls_text.get_width()//2, SCREEN_HEIGHT - 40))
         
         pygame.display.flip()
