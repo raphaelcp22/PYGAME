@@ -3,15 +3,12 @@ import sys
 import math
 import random
 from pygame.math import Vector2
+import pygame.gfxdraw  # Partículas em pixel art
 
 # features faltando:
-# sistema de colisão mais realista
-# sistema de vida
 # pitstop com regeneração de vida
 # melhor drift
-# sistema de particulas e efeitos visuais
-# contagem de laps com detecção de linha de chegada
-# display de velocidade
+# contagem de voltas com detecção de linha de chegada
 # tiles de muro ou areia para evitar trapaça
 
 # inicia o pygame
@@ -20,8 +17,16 @@ pygame.init()
 # inicia o sistema de som
 pygame.mixer.init()
 
-# dimensões da tela
+# Ajustes de tela e constantes
 SCREEN_WIDTH, SCREEN_HEIGHT = 1200, 800
+CELL_SIZE = 10
+COLS, ROWS = SCREEN_WIDTH // CELL_SIZE, SCREEN_HEIGHT // CELL_SIZE
+TRACK_CENTER = (SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2)
+COUNTDOWN_TIME = 3
+REQUIRED_LAPS = 5
+ORIGINAL_MAX_SPEED = 8  # pit-stop: valor original da velocidade máxima
+
+# dimensões da tela
 screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
 pygame.display.set_caption("Pixel Racer Championship")
 clock = pygame.time.Clock()
@@ -38,9 +43,6 @@ except:
     sound_available = False
     print("Arquivos de som não encontrados. Continuando sem som.")
 
-
-CELL_SIZE = 10
-COLS, ROWS = SCREEN_WIDTH // CELL_SIZE, SCREEN_HEIGHT // CELL_SIZE
 
 # cores
 GRASS_SHADES = [(34, 177, 76), (30, 150, 60), (40, 200, 80)]
@@ -91,7 +93,7 @@ tilemap = [[0 for _ in range(COLS)] for _ in range(ROWS)]
 grass_map = [[0 for _ in range(COLS)] for _ in range(ROWS)]
 
 # carrega foto da pista
-track_mask = pygame.image.load("track_mask2.png").convert()
+track_mask = pygame.image.load("track_mask3.png").convert()
 track_mask = pygame.transform.scale(track_mask, (COLS, ROWS))
 
 for y in range(ROWS):
@@ -105,6 +107,8 @@ for y in range(ROWS):
             tilemap[y][x] = 2
         elif color == (0, 0, 255):       # linha de chegada
             tilemap[y][x] = 4
+        elif color == (255, 255, 255):   # detecção de pit-stop
+            tilemap[y][x] = 5
         else:
             tilemap[y][x] = 0  # outros pixels são considerados grama
 
@@ -136,8 +140,50 @@ except:
     font_tiny = pygame.font.Font(None, 30)
     font_huge = pygame.font.Font(None, 100)
 
-# centro da pista
-TRACK_CENTER = (SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2)
+# Sistema de partículas
+class ParticleSystem:
+    def __init__(self):
+        self.particles = []
+    def add_particle(self, x, y, color, velocity=None, size=5, lifetime=60, gravity=0.1, fade=True):
+        if velocity is None:
+            angle = random.uniform(0, math.pi * 2)
+            speed = random.uniform(0.5, 2)
+            velocity = (math.cos(angle) * speed, math.sin(angle) * speed)
+        self.particles.append({
+            'x': x, 'y': y, 'color': color, 'vx': velocity[0], 'vy': velocity[1],
+            'size': size, 'max_size': size, 'lifetime': lifetime, 'max_lifetime': lifetime,
+            'gravity': gravity, 'fade': fade, 'growth': random.uniform(-0.1, 0.3)
+        })
+    def update(self):
+        for particle in self.particles[:]:
+            particle['x'] += particle['vx']
+            particle['y'] += particle['vy']
+            particle['vy'] += particle['gravity']
+            particle['size'] += particle['growth']
+            particle['lifetime'] -= 1
+            if particle['lifetime'] <= 0 or particle['size'] <= 0:
+                self.particles.remove(particle)
+    def draw(self, surface, camera=None):
+        for particle in self.particles:
+            alpha = 255
+            if particle['fade']:
+                alpha = int(255 * (particle['lifetime'] / particle['max_lifetime']))
+            size = max(1, particle['size'])
+            color = list(particle['color'])
+            if len(color) == 3:
+                color.append(alpha)
+            else:
+                color[3] = alpha
+            pos = (int(particle['x']), int(particle['y']))
+            if camera:
+                pos = (int(particle['x'] + camera.camera.x), int(particle['y'] + camera.camera.y))
+            if size > 2:
+                pygame.gfxdraw.filled_circle(surface, pos[0], pos[1], int(size), color)
+                pygame.gfxdraw.aacircle(surface, pos[0], pos[1], int(size), color)
+            else:
+                pygame.draw.circle(surface, color, pos, int(size))
+
+particle_system = ParticleSystem()
 
 class Car(pygame.sprite.Sprite):
     def __init__(self, x, y, color, controls, player_num):
@@ -145,31 +191,43 @@ class Car(pygame.sprite.Sprite):
         try:
             self.original_image = self.load_car_image(player_num)
         except pygame.error as e:
-            print(f"Error loading car image for player {player_num}: {e}")
+            print(f"Erro ao carregar imagem do carro para o jogador {player_num}: {e}")
             sys.exit(1)
         self.image = self.original_image
         self.rect = self.image.get_rect(center=(x, y))
-        self.mask = pygame.mask.from_surface(self.image)  # Pixel-perfect mask
         self.pos = Vector2(x, y)
         self.velocity = Vector2(0, 0)
-        self.angle = 0  # para direita
-        self.acceleration = 0.3
-        self.max_speed = 8
+        self.angle = 0
+        self.acceleration = 0.26
+        self.max_speed = ORIGINAL_MAX_SPEED
+        self.original_max_speed = ORIGINAL_MAX_SPEED  # pit-stop: para restaurar
         self.reverse_speed = self.max_speed * 0.5
         self.friction = 0.05
-        self.rotation_speed = 2.5
-        self.drift_factor = 0.95
+        self.rotation_speed = 5
+        self.drift_factor = 2
         self.traction = 1.0
         self.controls = controls
         self.player_num = player_num
         self.last_position = Vector2(x, y)
+        self.skid_marks = []
+        self.boost = 100
+        self.boosting = False
+        self.boost_power = 1.5
+        self.drifting = False
+        self.health = 100
+        self.invincible = 0
+        self.visible = True
+        self.flash_timer = 0
+        self.engine_sound_playing = False
+        self.collision_cooldown = 0
+        self.last_collision_time = 0
+        self.drift_angle = 0
+        self.speed_effect_timer = 0
         self.off_track = False
         self.off_track_timer = 0
-        self.engine_sound_playing = False  # controle do som do motor
-        self.last_collision_time = 0
-        self.collision_cooldown = 0  # Cooldown for collision
-        self.boost = 100  # medidor de turbo
-        self.boosting = False  # se está usando turbo
+        self.laps = 0
+        self.crossed_finish = False
+        self.in_pitstop = False  # pit-stop: flag para saber se está no pit
 
     def load_car_image(self, player_num):
         """Carrega imagem do carro baseado no número do jogador"""
@@ -183,112 +241,224 @@ class Car(pygame.sprite.Sprite):
     
     def update(self, cars):
         keys = pygame.key.get_pressed()
-
-        # Decrement collision cooldown if active
+        # Cooldowns
         if self.collision_cooldown > 0:
             self.collision_cooldown -= 1
+        if self.invincible > 0:
+            self.flash_timer += 1
+            self.visible = self.flash_timer % 10 < 5
+            self.invincible -= 1
+        else:
+            self.visible = True
 
-        # sistema de som
+        # Som do motor
         if sound_available:
-            # som do motor - volume varia com velocidade
             engine_volume = min(0.7, self.velocity.length() / self.max_speed)
             if engine_volume > 0.1:
                 if not self.engine_sound_playing:
-                    engine_sound.play(-1)  # loop no som
+                    engine_sound.play(-1)
                     self.engine_sound_playing = True
                 engine_sound.set_volume(engine_volume)
             else:
                 if self.engine_sound_playing:
                     engine_sound.stop()
                     self.engine_sound_playing = False
-            
-            # som do turbo
-            self.boosting = False
-            if keys[self.controls['boost']] and self.boost > 0 and self.velocity.length() > 0:
-                self.boosting = True
-                if random.random() < 0.1:  # toca só as vezes pra não encher
-                    boost_sound.play()
-        
-        # controles
+
+        # Controles
         if keys[self.controls['accelerate']]:
-            self.velocity += Vector2(math.cos(math.radians(self.angle)), 
-                                   math.sin(math.radians(self.angle))) * self.acceleration
-        
+            self.velocity += Vector2(math.cos(math.radians(self.angle)),
+                                    math.sin(math.radians(self.angle))) * self.acceleration
         if keys[self.controls['brake']]:
-            self.velocity -= Vector2(math.cos(math.radians(self.angle)), 
-                                   math.sin(math.radians(self.angle))) * (self.acceleration * 0.8)
-        
-        # turbo
-        if keys[self.controls['boost']] and self.boost > 0:
-            boost_amount = self.acceleration * 1.5
-            self.velocity += Vector2(math.cos(math.radians(self.angle)), 
-                                   math.sin(math.radians(self.angle))) * boost_amount
-            self.boost -= 1.5  # gasta turbo
+            self.velocity -= Vector2(math.cos(math.radians(self.angle)),
+                                    math.sin(math.radians(self.angle))) * (self.acceleration * 0.8)
+
+        # Turbo
+        self.boosting = False
+        if keys[self.controls['boost']] and self.boost > 0 and self.velocity.length() > 0:
+            boost_amount = self.acceleration * self.boost_power
+            self.velocity += Vector2(math.cos(math.radians(self.angle)),
+                                    math.sin(math.radians(self.angle))) * boost_amount
+            self.boost -= 1.5
             self.boosting = True
-        elif not self.boosting and self.boost < 100:
-            self.boost += 0.2  # recarrega turbo
-        
-        # direção
+            if sound_available and random.random() < 0.1:
+                boost_sound.play()
+            if random.random() < 0.2:
+                particle_system.add_particle(
+                    self.pos.x + math.cos(math.radians(self.angle + 180)) * 30,
+                    self.pos.y + math.sin(math.radians(self.angle + 180)) * 30,
+                    (255, 200, 100),
+                    (0, -0.5),
+                    10, 35, 0.05, False
+                )
+        if not self.boosting and self.boost < 100:
+            self.boost += 0.2
+
+        # Direção & drift
         turning = 0
         if keys[self.controls['left']]:
             turning += self.rotation_speed * (1 - (0.7 * (self.velocity.length() / self.max_speed)))
         if keys[self.controls['right']]:
             turning -= self.rotation_speed * (1 - (0.7 * (self.velocity.length() / self.max_speed)))
-        
         if self.velocity.length() > 0.5:
             self.angle += turning * (self.velocity.length() / self.max_speed)
-        
-        # fricção
+
+        # Lógica de drift
+        self.drifting = False
+        if self.velocity.length() > self.max_speed * 0.6 and abs(turning) > 0.5:
+            self.drifting = True
+            self.traction = 0.8
+            self.drift_angle = turning * 0.5
+            if random.random() < 0.3 and self.velocity.length() > 2:
+                self.skid_marks.append({
+                    'pos': Vector2(self.pos.x, self.pos.y),
+                    'angle': self.angle,
+                    'life': 100
+                })
+                particle_system.add_particle(
+                    self.pos.x + math.cos(math.radians(self.angle + 90)) * 20,
+                    self.pos.y + math.sin(math.radians(self.angle + 90)) * 20,
+                    (80, 80, 80),
+                    None, 4, 45, 0, True
+                )
+        else:
+            self.traction = 1.0
+            self.drift_angle *= 0.9
+        if self.drifting:
+            self.angle += self.drift_angle
+
+        # Atrito
         self.velocity *= (1 - self.friction * self.traction)
-        
-        # vel. máxima
+        # Limite de velocidade
         if self.velocity.length() > self.max_speed * (1.5 if self.boosting else 1.0):
             self.velocity.scale_to_length(self.max_speed * (1.5 if self.boosting else 1.0))
-        
-        # calcula nova posição
-        new_pos = self.pos + self.velocity
 
-        # sistema de colisão/detecção de pista
+        # Nova posição
+        new_pos = self.pos + self.velocity
         cell_x = int(new_pos.x / CELL_SIZE)
         cell_y = int(new_pos.y / CELL_SIZE)
+        tile = tilemap[cell_y][cell_x] if 0 <= cell_x < COLS and 0 <= cell_y < ROWS else 0
 
-        if (0 <= cell_x < COLS and 0 <= cell_y < ROWS and 
-            tilemap[cell_y][cell_x] in (0, 3)):  # fora da pista
+        # --- aplica efeitos do pit-stop ---
+        if tile == 5:
+            self.health = 100  # cura total
+            self.max_speed = self.original_max_speed * 0.5  # reduz velocidade máxima
+            self.in_pitstop = True
+        elif self.in_pitstop and tile != 5:
+            self.max_speed = self.original_max_speed  # restaura velocidade máxima
+            self.in_pitstop = False
+
+        # Lógica fora da pista (dano se ficar muito tempo fora)
+        if tile in (0, 3):
             self.off_track = True
             self.off_track_timer += 1
-            self.velocity *= 0.95  # mais devagar na grama
+            self.velocity *= 0.95
+            if self.off_track_timer > 60 and self.collision_cooldown == 0:
+                self.health = max(0, self.health - 1)
+                self.collision_cooldown = 10
+                if sound_available and random.random() < 0.1:
+                    crash_sound.play()
         else:
             self.off_track = False
             self.off_track_timer = 0
 
         self.pos = new_pos
 
-        # Atualiza sprite e máscara para colisão pixel-perfect
+        # Física de colisão entre carros
+        current_time = pygame.time.get_ticks()
+        for car in cars:
+            if (car != self and pygame.sprite.collide_mask(self, car)
+                and current_time - self.last_collision_time > 500):
+                self.last_collision_time = current_time
+                collision_angle = math.atan2(car.pos.y - self.pos.y, car.pos.x - self.pos.x)
+                relative_velocity = self.velocity - car.velocity
+                force = relative_velocity.length() * 0.7
+                if force > 2:
+                    damage = force * 2
+                    if self.collision_cooldown == 0:
+                        self.health = max(0, self.health - damage)
+                        self.invincible = 15
+                        self.collision_cooldown = 30
+                    if car.collision_cooldown == 0:
+                        car.health = max(0, car.health - damage)
+                        car.invincible = 15
+                        car.collision_cooldown = 30
+                    if sound_available:
+                        crash_sound.play()
+                impulse = Vector2(math.cos(collision_angle), math.sin(collision_angle)) * force
+                self.velocity -= impulse * 0.7
+                car.velocity += impulse * 0.7
+                for _ in range(int(force * 8)):
+                    particle_system.add_particle(
+                        (self.pos.x + car.pos.x) / 2,
+                        (self.pos.y + car.pos.y) / 2,
+                        (200, 200, 200),
+                        (random.uniform(-force, force), random.uniform(-force, force)),
+                        5, 35, 0.1, True
+                    )
+
+        # Efeito de linhas de velocidade
+        if self.velocity.length() > self.max_speed * 0.8:
+            self.speed_effect_timer += 1
+            if self.speed_effect_timer % 3 == 0:
+                for _ in range(2):
+                    offset = random.uniform(-20, 20)
+                    particle_system.add_particle(
+                        self.pos.x + math.cos(math.radians(self.angle + 180 + offset)) * 40,
+                        self.pos.y + math.sin(math.radians(self.angle + 180 + offset)) * 40,
+                        (255, 255, 255, 150),
+                        (random.uniform(-1, 1), random.uniform(-1, 1)),
+                        3, 25, 0, True
+                    )
+
+        # Detecção de volta (linha de chegada)
+        finish_line = pygame.Rect(
+            TRACK_CENTER[0] - 12,
+            120 - 140,
+            25,
+            280
+        )
+        front_pos = self.pos + Vector2(math.cos(math.radians(self.angle)), math.sin(math.radians(self.angle))) * 25
+        car_front = pygame.Rect(front_pos.x - 8, front_pos.y - 8, 16, 16)
+        if car_front.colliderect(finish_line):
+            if math.sin(math.radians(self.angle)) < -0.7:
+                if not self.crossed_finish:
+                    self.crossed_finish = True
+                    self.laps += 1
+                    self.boost = min(100, self.boost + 30)
+                    for _ in range(20):
+                        particle_system.add_particle(
+                            self.pos.x,
+                            self.pos.y,
+                            self.original_image.get_at((15, 15))[:3],
+                            (random.uniform(-3, 3), random.uniform(-3, 3)),
+                            8, 50, 0, True
+                        )
+            else:
+                self.crossed_finish = False
+        else:
+            self.crossed_finish = False
+
+        # Atualiza sprite
         self.image = pygame.transform.rotate(self.original_image, -self.angle)
         self.rect = self.image.get_rect(center=(self.pos.x, self.pos.y))
-        self.mask = pygame.mask.from_surface(self.image)
 
-        # Colisão entre carros (pixel-perfect, com cooldown)
-        current_time = pygame.time.get_ticks()
-        for other in cars:
-            if other is not self and pygame.sprite.collide_mask(self, other):
-                if current_time - self.last_collision_time > 500:
-                    collision_angle = math.atan2(other.pos.y - self.pos.y,
-                                                other.pos.x - self.pos.x)
-                    relative_velocity = self.velocity - other.velocity
-                    force = relative_velocity.length() * 0.7
-                    if force > 2 and sound_available:
-                        crash_sound.play()
-                    impulse = Vector2(math.cos(collision_angle), math.sin(collision_angle)) * force
-                    self.velocity -= impulse * 0.7
-                    other.velocity += impulse * 0.7
-                    self.last_collision_time = current_time
-                    self.collision_cooldown = 30
+    def draw_skid_marks(self, surface):
+        for skid in self.skid_marks[:]:
+            skid['life'] -= 1
+            if skid['life'] <= 0:
+                self.skid_marks.remove(skid)
+            else:
+                alpha = int(255 * (skid['life'] / 100))
+                skid_surface = pygame.Surface((25, 10), pygame.SRCALPHA)
+                pygame.draw.rect(skid_surface, (80, 80, 80, alpha), (0, 0, 25, 10))
+                rotated_skid = pygame.transform.rotate(skid_surface, -skid['angle'])
+                surface.blit(rotated_skid, rotated_skid.get_rect(center=skid['pos']))
 
     def draw(self, surface):
-        rotated_image = pygame.transform.rotate(self.original_image, -self.angle)
-        rect = rotated_image.get_rect(center=(self.pos.x, self.pos.y))
-        surface.blit(rotated_image, rect)
+        if self.visible:
+            rotated_image = pygame.transform.rotate(self.original_image, -self.angle)
+            rect = rotated_image.get_rect(center=(self.pos.x, self.pos.y))
+            surface.blit(rotated_image, rect)
 
 def draw_track(surface):
     for y in range(ROWS):
@@ -308,23 +478,36 @@ def draw_track(surface):
                 else:
                     checker_tile.fill(BLACK)
                 surface.blit(checker_tile, (x*CELL_SIZE, y*CELL_SIZE))
+            elif tile == 5:
+                # renderização do pit-stop
+                pygame.draw.rect(surface, BLUE, (x*CELL_SIZE, y*CELL_SIZE, CELL_SIZE, CELL_SIZE))
 
 def draw_hud(surface, cars):
     for i, car in enumerate(cars):
         player_text = font_small.render(f"P{car.player_num}", True, WHITE)
         pos_x = 20 if i == 0 else SCREEN_WIDTH - 120
         surface.blit(player_text, (pos_x, 20))
-        
-        # indicador de velocidade
+        # Barra de vida (estilo pixel)
+        health_width = int(100 * (car.health / 100))
+        pygame.draw.rect(surface, (40, 40, 40), (pos_x, 60, 100, 15))
+        pygame.draw.rect(surface, GREEN, (pos_x, 60, health_width, 15))
+        for seg in range(0, health_width, 10):
+            pygame.draw.rect(surface, (0, 100, 0), (pos_x + seg, 60, 8, 15))
+        pygame.draw.rect(surface, WHITE, (pos_x, 60, 100, 15), 2)
+        # Barra de turbo (estilo pixel)
+        boost_width = int(100 * (car.boost / 100))
+        pygame.draw.rect(surface, (20, 20, 20), (pos_x, 85, 100, 10))
+        pygame.draw.rect(surface, YELLOW, (pos_x, 85, boost_width, 10))
+        for seg in range(0, boost_width, 10):
+            pygame.draw.rect(surface, (180, 180, 0), (pos_x + seg, 85, 8, 10))
+        pygame.draw.rect(surface, WHITE, (pos_x, 85, 100, 10), 1)
+        # Contador de voltas
+        lap_text = font_small.render(f"VOLTAS:{min(car.laps, REQUIRED_LAPS)}/{REQUIRED_LAPS}", True, WHITE)
+        surface.blit(lap_text, (pos_x, 105))
+        # Indicador de velocidade
         speed = int(car.velocity.length() * 20)
         speed_text = font_small.render(f"{speed}KMH", True, WHITE)
-        surface.blit(speed_text, (pos_x, 60))
-        
-        # medidor de turbo
-        boost_width = int(100 * (car.boost / 100))
-        pygame.draw.rect(surface, (20, 20, 20), (pos_x, 90, 100, 10))
-        pygame.draw.rect(surface, YELLOW, (pos_x, 90, boost_width, 10))
-        pygame.draw.rect(surface, WHITE, (pos_x, 90, 100, 10), 1)
+        surface.blit(speed_text, (pos_x, 145))
 
 def draw_intro(surface):
     # tela de introdução
@@ -343,11 +526,13 @@ def draw_countdown(surface, count):
         surface.blit(count_text, (SCREEN_WIDTH//2 - count_text.get_width()//2, 
                                  SCREEN_HEIGHT//2 - count_text.get_height()//2))
     else:
-        go_text = font_huge.render("GO!", True, GREEN)
+        go_text = font_huge.render("VAI!", True, GREEN)
         surface.blit(go_text, (SCREEN_WIDTH//2 - go_text.get_width()//2, 
                               SCREEN_HEIGHT//2 - go_text.get_height()//2))
 
 def main():
+    global particle_system
+    particle_system = ParticleSystem()
     # toca música de fundo se disponível
     if sound_available:
         pygame.mixer.music.play(-1)  # loop na música
@@ -416,6 +601,7 @@ def main():
             for car in cars:
                 car.update(cars)
         
+        particle_system.update()
         # desenha tudo
         screen.fill(BLACK)
         
@@ -450,8 +636,13 @@ def main():
                 draw_countdown(screen, countdown)
             
             # instruções de controle
-            controls_text = font_tiny.render("WASD/ARROWS TO MOVE, SHIFT/CTRL TO BOOST", True, WHITE)
+            controls_text = font_tiny.render("WASD/SETA PARA MOVER, SHIFT/CTRL PARA TURBO", True, WHITE)
             screen.blit(controls_text, (SCREEN_WIDTH//2 - controls_text.get_width()//2, SCREEN_HEIGHT - 40))
+        
+        if game_state not in ["intro"]:
+            for car in cars:
+                car.draw_skid_marks(screen)
+            particle_system.draw(screen)
         
         pygame.display.flip()
         clock.tick(60)
