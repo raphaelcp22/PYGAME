@@ -6,10 +6,9 @@ from pygame.math import Vector2
 import pygame.gfxdraw  # Partículas em pixel art
 
 # features faltando:
-# pitstop com regeneração de vida
-# melhor drift
 # contagem de voltas com detecção de linha de chegada
 # tiles de muro ou areia para evitar trapaça
+# sem vida - 50% da velocidade
 
 # inicia o pygame
 pygame.init()
