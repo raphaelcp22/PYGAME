@@ -149,6 +149,7 @@ class Car(pygame.sprite.Sprite):
             sys.exit(1)
         self.image = self.original_image
         self.rect = self.image.get_rect(center=(x, y))
+        self.mask = pygame.mask.from_surface(self.image)  # Pixel-perfect mask
         self.pos = Vector2(x, y)
         self.velocity = Vector2(0, 0)
         self.angle = 0  # para direita
@@ -166,6 +167,7 @@ class Car(pygame.sprite.Sprite):
         self.off_track_timer = 0
         self.engine_sound_playing = False  # controle do som do motor
         self.last_collision_time = 0
+        self.collision_cooldown = 0  # Cooldown for collision
         self.boost = 100  # medidor de turbo
         self.boosting = False  # se está usando turbo
 
@@ -181,7 +183,11 @@ class Car(pygame.sprite.Sprite):
     
     def update(self, cars):
         keys = pygame.key.get_pressed()
-        
+
+        # Decrement collision cooldown if active
+        if self.collision_cooldown > 0:
+            self.collision_cooldown -= 1
+
         # sistema de som
         if sound_available:
             # som do motor - volume varia com velocidade
@@ -241,7 +247,7 @@ class Car(pygame.sprite.Sprite):
         
         # calcula nova posição
         new_pos = self.pos + self.velocity
-        
+
         # sistema de colisão/detecção de pista
         cell_x = int(new_pos.x / CELL_SIZE)
         cell_y = int(new_pos.y / CELL_SIZE)
@@ -256,30 +262,29 @@ class Car(pygame.sprite.Sprite):
             self.off_track_timer = 0
 
         self.pos = new_pos
-        
-        # colisão entre carros com som
-        current_time = pygame.time.get_ticks()
-        for car in cars:
-            if (car != self and pygame.sprite.collide_mask(self, car) and 
-                current_time - self.last_collision_time > 500):  # cooldown de 0.5s
-                
-                self.last_collision_time = current_time
-                relative_velocity = self.velocity - car.velocity
-                force = relative_velocity.length() * 0.7
-                
-                if force > 2 and sound_available:  # só toca som se for forte
-                    crash_sound.play()
-                
-                # física da colisão
-                collision_angle = math.atan2(car.pos.y - self.pos.y, car.pos.x - self.pos.x)
-                impulse = Vector2(math.cos(collision_angle), math.sin(collision_angle)) * force
-                self.velocity -= impulse * 0.7
-                car.velocity += impulse * 0.7
-        
-        # atualiza sprite
+
+        # Atualiza sprite e máscara para colisão pixel-perfect
         self.image = pygame.transform.rotate(self.original_image, -self.angle)
         self.rect = self.image.get_rect(center=(self.pos.x, self.pos.y))
-    
+        self.mask = pygame.mask.from_surface(self.image)
+
+        # Colisão entre carros (pixel-perfect, com cooldown)
+        current_time = pygame.time.get_ticks()
+        for other in cars:
+            if other is not self and pygame.sprite.collide_mask(self, other):
+                if current_time - self.last_collision_time > 500:
+                    collision_angle = math.atan2(other.pos.y - self.pos.y,
+                                                other.pos.x - self.pos.x)
+                    relative_velocity = self.velocity - other.velocity
+                    force = relative_velocity.length() * 0.7
+                    if force > 2 and sound_available:
+                        crash_sound.play()
+                    impulse = Vector2(math.cos(collision_angle), math.sin(collision_angle)) * force
+                    self.velocity -= impulse * 0.7
+                    other.velocity += impulse * 0.7
+                    self.last_collision_time = current_time
+                    self.collision_cooldown = 30
+
     def draw(self, surface):
         rotated_image = pygame.transform.rotate(self.original_image, -self.angle)
         rect = rotated_image.get_rect(center=(self.pos.x, self.pos.y))
