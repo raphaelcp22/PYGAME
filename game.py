@@ -18,9 +18,9 @@ clock = pygame.time.Clock()
 
 # carrega sons
 try:
-    engine_sound = pygame.mixer.Sound('engine.wav')  # som do motor
-    crash_sound = pygame.mixer.Sound('crash.wav')    # som de colisão
-    boost_sound = pygame.mixer.Sound('boost.wav')    # som de turbo
+    engine_sound = pygame.mixer.Sound('engine.mp3')  # som do motor
+    crash_sound = pygame.mixer.Sound('crash.mp3')    # som de colisão
+    boost_sound = pygame.mixer.Sound('boost.mp3')    # som de turbo
     music = pygame.mixer.music.load('race_music.mp3')  # música de fundo
     pygame.mixer.music.set_volume(0.5)  # volume mais baixo pra música
     sound_available = True
