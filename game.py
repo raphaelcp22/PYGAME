@@ -4,6 +4,16 @@ import math
 import random
 from pygame.math import Vector2
 
+# features faltando:
+# sistema de colisão mais realista
+# sistema de vida
+# pitstop com regeneração de vida
+# melhor drift
+# sistema de particulas e efeitos visuais
+# contagem de laps com detecção de linha de chegada
+# display de velocidade
+# tiles de muro ou areia para evitar trapaça
+
 # inicia o pygame
 pygame.init()
 
