@@ -65,7 +65,7 @@ for _ in range(2):
         tile.set_at((rx, ry), (gray, gray, gray))
     track_tiles.append(tile)
 
-# tiles de borda (NÃO TESTADO AINDA - FAZER PISTA COM BORDAS)
+# tiles de borda
 curb_tile = pygame.Surface((CELL_SIZE, CELL_SIZE))
 for i in range(CELL_SIZE):
     color = CURB_COLORS[(i // 5) % 2]
@@ -81,7 +81,7 @@ tilemap = [[0 for _ in range(COLS)] for _ in range(ROWS)]
 grass_map = [[0 for _ in range(COLS)] for _ in range(ROWS)]
 
 # carrega foto da pista
-track_mask = pygame.image.load("track_mask.png").convert()
+track_mask = pygame.image.load("track_mask2.png").convert()
 track_mask = pygame.transform.scale(track_mask, (COLS, ROWS))
 
 for y in range(ROWS):
@@ -286,7 +286,13 @@ def draw_track(surface):
             elif tile == 2:
                 surface.blit(curb_tile, (x*CELL_SIZE, y*CELL_SIZE))
             elif tile == 4:
-                pygame.draw.rect(surface, (0, 0, 255), (x*CELL_SIZE, y*CELL_SIZE, CELL_SIZE, CELL_SIZE))
+                # padrão xadrez preto e branco para a linha de chegada
+                checker_tile = pygame.Surface((CELL_SIZE, CELL_SIZE))
+                if (x + y) % 2 == 0:  # alterna as cores em padrão xadrez
+                    checker_tile.fill(WHITE)
+                else:
+                    checker_tile.fill(BLACK)
+                surface.blit(checker_tile, (x*CELL_SIZE, y*CELL_SIZE))
 
 def draw_hud(surface, cars):
     for i, car in enumerate(cars):
