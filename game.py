@@ -24,6 +24,13 @@ COUNTDOWN_TIME = 3
 REQUIRED_LAPS = 5
 ORIGINAL_MAX_SPEED = 8  # pit-stop: valor original da velocidade máxima
 
+# constantes do sistema de voltas
+LAPS_TO_WIN = 10
+LAP_COOLDOWN = 100  # ms
+
+game_state = "intro"
+winner_num = None
+
 # dimensões da tela
 screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
 pygame.display.set_caption("Pixel Racer Championship")
@@ -34,6 +41,7 @@ try:
     engine_sound = pygame.mixer.Sound('engine.mp3')  # som do motor
     crash_sound = pygame.mixer.Sound('crash.mp3')    # som de colisão
     boost_sound = pygame.mixer.Sound('boost.mp3')    # som de turbo
+    lap_sound = pygame.mixer.Sound('lap.mp3')        # som de volta
     music = pygame.mixer.music.load('race_music.mp3')  # música de fundo
     pygame.mixer.music.set_volume(0.5)  # volume mais baixo pra música
     sound_available = True
@@ -223,7 +231,9 @@ class Car(pygame.sprite.Sprite):
         self.speed_effect_timer = 0
         self.off_track = False
         self.off_track_timer = 0
+        # variaveis das voltas
         self.laps = 0
+        self.last_lap_time = -LAP_COOLDOWN
         self.crossed_finish = False
         self.in_pitstop = False  # pit-stop: flag para saber se está no pit
 
@@ -414,32 +424,22 @@ class Car(pygame.sprite.Sprite):
                         3, 25, 0, True
                     )
 
-        # Detecção de volta (linha de chegada)
-        finish_line = pygame.Rect(
-            TRACK_CENTER[0] - 12,
-            120 - 140,
-            25,
-            280
-        )
-        front_pos = self.pos + Vector2(math.cos(math.radians(self.angle)), math.sin(math.radians(self.angle))) * 25
-        car_front = pygame.Rect(front_pos.x - 8, front_pos.y - 8, 16, 16)
-        if car_front.colliderect(finish_line):
-            if math.sin(math.radians(self.angle)) < -0.7:
-                if not self.crossed_finish:
-                    self.crossed_finish = True
-                    self.laps += 1
-                    self.boost = min(100, self.boost + 30)
-                    for _ in range(20):
-                        particle_system.add_particle(
-                            self.pos.x,
-                            self.pos.y,
-                            self.original_image.get_at((15, 15))[:3],
-                            (random.uniform(-3, 3), random.uniform(-3, 3)),
-                            8, 50, 0, True
-                        )
-            else:
-                self.crossed_finish = False
-        else:
+        # detecção de voltas
+        current = pygame.time.get_ticks()
+        if tile == 4 and math.sin(math.radians(self.angle)) < -0.7:
+            if not self.crossed_finish and current - self.last_lap_time >= LAP_COOLDOWN:
+                self.laps += 1
+                self.last_lap_time = current
+                self.crossed_finish = True
+                # som de volta
+                if sound_available:
+                    lap_sound.play()
+                # victory check
+                global game_state, winner_num
+                if self.laps >= LAPS_TO_WIN:
+                    game_state = "winner"
+                    winner_num = self.player_num
+        elif tile != 4:
             self.crossed_finish = False
 
         # Atualiza sprite
@@ -506,7 +506,7 @@ def draw_hud(surface, cars):
             pygame.draw.rect(surface, (180, 180, 0), (pos_x + seg, 85, 8, 10))
         pygame.draw.rect(surface, WHITE, (pos_x, 85, 100, 10), 1)
         # Contador de voltas
-        lap_text = font_small.render(f"VOLTAS:{min(car.laps, REQUIRED_LAPS)}/{REQUIRED_LAPS}", True, WHITE)
+        lap_text = font_small.render(f"VOLTAS:{min(car.laps, LAPS_TO_WIN)}/{LAPS_TO_WIN}", True, WHITE)
         surface.blit(lap_text, (pos_x, 105))
         # Indicador de velocidade
         speed = int(car.velocity.length() * 20)
@@ -536,19 +536,18 @@ def draw_countdown(surface, count):
 
 def main():
     global particle_system
-    particle_system = ParticleSystem()
+    global game_state, winner_num
     # toca música de fundo se disponível
     if sound_available:
         pygame.mixer.music.play(-1)  # loop na música
     
-    game_state = "intro"
     countdown = 3
     last_tick = pygame.time.get_ticks()
     cars = []
-    
+
     while True:
         current_time = pygame.time.get_ticks()
-        
+
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 # para todos os sons ao sair
@@ -591,7 +590,19 @@ def main():
                             engine_sound.stop()
                         pygame.quit()
                         sys.exit()
-        
+                # controles da tela de vitória
+                elif game_state == "winner":
+                    if event.key == pygame.K_q:
+                        if sound_available:
+                            pygame.mixer.music.stop()
+                            engine_sound.stop()
+                        pygame.quit()
+                        sys.exit()
+                    elif event.key == pygame.K_r:
+                        # restart game
+                        game_state = "intro"
+                        winner_num = None
+
         # lógica da contagem regressiva
         if game_state == "countdown":
             if current_time - last_tick >= 1000:
@@ -609,39 +620,47 @@ def main():
         # desenha tudo
         screen.fill(BLACK)
         
-        if game_state == "intro":
-            draw_intro(screen)
+        # tela de vitória
+        if game_state == "winner":
+            # bloqueia desenhos normais, só mostra a imagem de vitória
+            screen.fill(BLACK)
+            img = pygame.image.load(f"player{winner_num}_win.png").convert_alpha()
+            img = pygame.transform.scale(img, (400, 300))
+            screen.blit(img, ((SCREEN_WIDTH - img.get_width()) // 2, (SCREEN_HEIGHT - img.get_height()) // 2))
         else:
-            draw_track(screen)
-            
-            if game_state in ["countdown", "racing"]:
-                for car in cars:
-                    car.draw(screen)
-                    
-                    # efeito visual do turbo
-                    if car.boosting:
-                        boost_pos = car.pos + Vector2(
-                            math.cos(math.radians(car.angle + 180)) * 35,
-                            math.sin(math.radians(car.angle + 180)) * 35
-                        )
-                        pygame.draw.circle(
-                            screen, 
-                            (255, 200, 100, 180), 
-                            (int(boost_pos.x), int(boost_pos.y)), 
-                            20
-                        )
-            
-            # mostra HUD durante a corrida
-            if game_state in ["countdown", "racing"] and cars:
-                draw_hud(screen, cars)
-            
-            # mostra contagem regressiva
-            if game_state == "countdown":
-                draw_countdown(screen, countdown)
-            
-            # instruções de controle
-            controls_text = font_tiny.render("WASD/SETA PARA MOVER, SHIFT/CTRL PARA TURBO", True, WHITE)
-            screen.blit(controls_text, (SCREEN_WIDTH//2 - controls_text.get_width()//2, SCREEN_HEIGHT - 40))
+            if game_state == "intro":
+                draw_intro(screen)
+            else:
+                draw_track(screen)
+                
+                if game_state in ["countdown", "racing"]:
+                    for car in cars:
+                        car.draw(screen)
+                        
+                        # efeito visual do turbo
+                        if car.boosting:
+                            boost_pos = car.pos + Vector2(
+                                math.cos(math.radians(car.angle + 180)) * 35,
+                                math.sin(math.radians(car.angle + 180)) * 35
+                            )
+                            pygame.draw.circle(
+                                screen, 
+                                (255, 200, 100, 180), 
+                                (int(boost_pos.x), int(boost_pos.y)), 
+                                20
+                            )
+                
+                # mostra HUD durante a corrida
+                if game_state in ["countdown", "racing"] and cars:
+                    draw_hud(screen, cars)
+                
+                # mostra contagem regressiva
+                if game_state == "countdown":
+                    draw_countdown(screen, countdown)
+                
+                # instruções de controle
+                controls_text = font_tiny.render("WASD/SETA PARA MOVER, SHIFT/CTRL PARA TURBO", True, WHITE)
+                screen.blit(controls_text, (SCREEN_WIDTH//2 - controls_text.get_width()//2, SCREEN_HEIGHT - 40))
         
         if game_state not in ["intro"]:
             for car in cars:
