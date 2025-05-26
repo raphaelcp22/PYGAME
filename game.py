@@ -8,7 +8,6 @@ import pygame.gfxdraw  # Partículas em pixel art
 # features faltando:
 # contagem de voltas com detecção de linha de chegada
 # tiles de muro ou areia para evitar trapaça
-# sem vida - 50% da velocidade
 
 # inicia o pygame
 pygame.init()
@@ -239,6 +238,12 @@ class Car(pygame.sprite.Sprite):
         return pygame.transform.rotate(car_image, -90)
     
     def update(self, cars):
+        # Verifica se o carro está sem vida e ajusta a velocidade
+        if self.health <= 0:
+            self.max_speed = self.original_max_speed * 0.5  # 50% da velocidade normal
+        else:
+            self.max_speed = self.original_max_speed  # velocidade normal
+
         keys = pygame.key.get_pressed()
         # Cooldowns
         if self.collision_cooldown > 0:
@@ -340,10 +345,10 @@ class Car(pygame.sprite.Sprite):
         # --- aplica efeitos do pit-stop ---
         if tile == 5:
             self.health = 100  # cura total
-            self.max_speed = self.original_max_speed * 0.5  # reduz velocidade máxima
+            self.max_speed = self.original_max_speed * 0.5 if self.health <= 0 else self.original_max_speed  # mantém 50% se sem vida
             self.in_pitstop = True
         elif self.in_pitstop and tile != 5:
-            self.max_speed = self.original_max_speed  # restaura velocidade máxima
+            self.max_speed = self.original_max_speed * 0.5 if self.health <= 0 else self.original_max_speed  # mantém 50% se sem vida
             self.in_pitstop = False
 
         # Lógica fora da pista (dano se ficar muito tempo fora)
