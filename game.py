@@ -99,7 +99,7 @@ tilemap = [[0 for _ in range(COLS)] for _ in range(ROWS)]
 grass_map = [[0 for _ in range(COLS)] for _ in range(ROWS)]
 
 # carrega foto da pista
-track_mask = pygame.image.load("track_mask3.png").convert()
+track_mask = pygame.image.load("track_mask_teste.png").convert()
 track_mask = pygame.transform.scale(track_mask, (COLS, ROWS))
 
 for y in range(ROWS):
@@ -115,6 +115,10 @@ for y in range(ROWS):
             tilemap[y][x] = 4
         elif color == (255, 255, 255):   # detecção de pit-stop
             tilemap[y][x] = 5
+        elif color == (100, 100, 100):   # muro sólido
+            tilemap[y][x] = 6 
+        elif color == (150, 150, 150):   # borda que empurra
+            tilemap[y][x] = 7
         else:
             tilemap[y][x] = 0  # outros pixels são considerados grama
 
@@ -383,7 +387,28 @@ class Car(pygame.sprite.Sprite):
             self.off_track = False
             self.off_track_timer = 0
 
-        self.pos = new_pos
+        # Atualiza last_position antes de mover
+        self.last_position = self.pos.copy()
+
+        # muro sólido
+        if tile == 6:
+            self.pos = self.last_position.copy()
+            self.velocity = Vector2(-self.velocity.x * 0.5, -self.velocity.y * 0.5)
+            if sound_available:
+                crash_sound.play()
+            self.health = max(0, self.health - 10)
+            return
+        # borda que empurra
+        if tile == 7:
+            self.pos = self.last_position.copy()
+            self.velocity *= -0.3
+            return
+
+        # Prevent car from leaving the screen
+        half_w, half_h = self.rect.width // 2, self.rect.height // 2
+        new_x = min(max(new_pos.x, half_w), SCREEN_WIDTH - half_w)
+        new_y = min(max(new_pos.y, half_h), SCREEN_HEIGHT - half_h)
+        self.pos = Vector2(new_x, new_y)
 
         # Física de colisão entre carros
         current_time = pygame.time.get_ticks()
@@ -496,6 +521,10 @@ def draw_track(surface):
             elif tile == 5:
                 # renderização do pit-stop
                 pygame.draw.rect(surface, BLUE, (x*CELL_SIZE, y*CELL_SIZE, CELL_SIZE, CELL_SIZE))
+            elif tile == 6:  # muro
+                pygame.draw.rect(surface, (50, 50, 50), (x*CELL_SIZE, y*CELL_SIZE, CELL_SIZE, CELL_SIZE))
+            elif tile == 7:  # borda
+                pygame.draw.rect(surface, (180, 180, 180), (x*CELL_SIZE, y*CELL_SIZE, CELL_SIZE, CELL_SIZE))
 
 def draw_hud(surface, cars):
     '''Função que renderiza o HUD do game, mostrando informações essenciais do carro, como vida, estado do turbo, voltas e o velocímetro'''
