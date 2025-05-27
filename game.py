@@ -148,9 +148,12 @@ except:
 
 # Sistema de partículas
 class ParticleSystem:
+    '''Essa classe é responsável por gerenciar o sistema de partículas do jogo, contendo as funções que permitem adicionar, atualizar, e impor efeitos visuais ao jogo, ainda mais quando se trata da física por trás (fumaça, explosões, etc.)'''
     def __init__(self):
+        ''' Inicializa a lista e o sistema de partículas para o jogo funcionar'''
         self.particles = []
     def add_particle(self, x, y, color, velocity=None, size=5, lifetime=60, gravity=0.1, fade=True):
+        '''Adiciona uma partícula ao sistema, possuindo posição, cor, duração, velocidade, tamanho, gravidade e se deve desaparecer de forma gradual'''
         if velocity is None:
             angle = random.uniform(0, math.pi * 2)
             speed = random.uniform(0.5, 2)
@@ -161,6 +164,7 @@ class ParticleSystem:
             'gravity': gravity, 'fade': fade, 'growth': random.uniform(-0.1, 0.3)
         })
     def update(self):
+        '''Função responsável por atualizar as partículas, removendo as que expiraram ou que diminuíram de tamanho, ou até para movê-las'''
         for particle in self.particles[:]:
             particle['x'] += particle['vx']
             particle['y'] += particle['vy']
@@ -170,6 +174,7 @@ class ParticleSystem:
             if particle['lifetime'] <= 0 or particle['size'] <= 0:
                 self.particles.remove(particle)
     def draw(self, surface, camera=None):
+        '''Função que é responsável por renderizar as partículas que estão na tela (com suporte a transparência e efeitos de fade)'''
         for particle in self.particles:
             alpha = 255
             if particle['fade']:
@@ -192,7 +197,9 @@ class ParticleSystem:
 particle_system = ParticleSystem()
 
 class Car(pygame.sprite.Sprite):
+    '''Essa classe tem a responsabilidade de gerenciar o carro do jogador, contendo as funções que fazem a lógica de movimento, colisão, física, e a renderização do carro que está na tela. Além disso, ela também controla o estado do automóvel.'''
     def __init__(self, x, y, color, controls, player_num):
+        '''Função que inicializa o carro, carregando a sua imagem, definindo a sua posição inicial, a velocidade, aceleração, ângulo, e diversos outros atributos essenciais para o funcionamento do carro'''
         super().__init__()
         try:
             self.original_image = self.load_car_image(player_num)
@@ -248,6 +255,7 @@ class Car(pygame.sprite.Sprite):
         return pygame.transform.rotate(car_image, -90)
     
     def update(self, cars):
+        '''Função responsável por atualizar o carro, verificando potenciais colisões, atualizando a sua atual posição, o carregamento do turbo, e explorar o seu atual estado de vida útil dentro do jogo'''
         # Verifica se o carro está sem vida e ajusta a velocidade
         if self.health <= 0:
             self.max_speed = self.original_max_speed * 0.5  # 50% da velocidade normal
@@ -447,6 +455,7 @@ class Car(pygame.sprite.Sprite):
         self.rect = self.image.get_rect(center=(self.pos.x, self.pos.y))
 
     def draw_skid_marks(self, surface):
+        '''Função responsável por desenhar as marcas de derrapagem que aparecem na pista, tendo como base a posição do carro e o drift que foi feito, adicionando elementos da física ao jogo'''
         for skid in self.skid_marks[:]:
             skid['life'] -= 1
             if skid['life'] <= 0:
@@ -459,12 +468,14 @@ class Car(pygame.sprite.Sprite):
                 surface.blit(rotated_skid, rotated_skid.get_rect(center=skid['pos']))
 
     def draw(self, surface):
+        '''Função que renderiza o carro na tela, com rotação e efeitos de dano'''
         if self.visible:
             rotated_image = pygame.transform.rotate(self.original_image, -self.angle)
             rect = rotated_image.get_rect(center=(self.pos.x, self.pos.y))
             surface.blit(rotated_image, rect)
 
 def draw_track(surface):
+    '''Desenha a pista, grama, bordas e elementos especiais (linha de chegada, pit-stop) baseado no tilemap'''
     for y in range(ROWS):
         for x in range(COLS):
             tile = tilemap[y][x]
@@ -487,6 +498,7 @@ def draw_track(surface):
                 pygame.draw.rect(surface, BLUE, (x*CELL_SIZE, y*CELL_SIZE, CELL_SIZE, CELL_SIZE))
 
 def draw_hud(surface, cars):
+    '''Função que renderiza o HUD do game, mostrando informações essenciais do carro, como vida, estado do turbo, voltas e o velocímetro'''
     for i, car in enumerate(cars):
         player_text = font_small.render(f"P{car.player_num}", True, WHITE)
         pos_x = 20 if i == 0 else SCREEN_WIDTH - 120
@@ -514,12 +526,14 @@ def draw_hud(surface, cars):
         surface.blit(speed_text, (pos_x, 145))
 
 def draw_intro(surface):
+    '''Função que renderiza a tela de introdução do jogo, mostrando a imagem de fundo e como inicializá-lo'''
     # tela de introdução
     intro_img = pygame.image.load("intro_screen.png").convert()
     intro_img = pygame.transform.scale(intro_img, (SCREEN_WIDTH, SCREEN_HEIGHT))
     surface.blit(intro_img, (0, 0))
 
 def draw_countdown(surface, count):
+    '''Função que mostra a contagem regressiva antes da corrida começar, com os números grandes, e no fim, a mensagem "VAI!"'''
     # contagem regressiva
     overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
     overlay.fill((0, 0, 0, 150))
@@ -535,6 +549,7 @@ def draw_countdown(surface, count):
                               SCREEN_HEIGHT//2 - go_text.get_height()//2))
 
 def main():
+    '''A função principal do jogo, a qual tem a responsabilidade de inicializar e controlar o loop do jogo, gerenciar os estados dos carros, e chamar todas as outras funções presentes no game. Além disso, ela cria a janela do jogo, atualiza a lógica por trás, ativa a renderização, faz o controle de tempo e de frames, e também finaliza o jogo e encerra o Pygame'''
     global particle_system
     global game_state, winner_num
     # toca música de fundo se disponível
