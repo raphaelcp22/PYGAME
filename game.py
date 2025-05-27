@@ -459,7 +459,7 @@ class Car(pygame.sprite.Sprite):
 
         # detecção de voltas
         current = pygame.time.get_ticks()
-        if tile == 4 and math.sin(math.radians(self.angle)) < -0.7:
+        if tile == 4 and math.sin(math.radians(self.angle)) > 0.7:
             if not self.crossed_finish and current - self.last_lap_time >= LAP_COOLDOWN:
                 self.laps += 1
                 self.last_lap_time = current
