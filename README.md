@@ -1,6 +1,13 @@
 # PYGAME: Fórmula Insper
 Enrique Pellaes, Lucas Moreira, e Raphael Primo - Engenharia Turma A
 
+O código está organizado em dois arquivos principais:
+
+engine.py: contém todas as constantes, classes (ParticleSystem, Car) e funções de renderização (draw_track, draw_hud, draw_intro, draw_countdown).
+
+main.py: entrypoint do jogo, responsável por inicializar o Pygame, carregar assets e executar o loop principal em tela cheia.
+
+
 Como rodar o jogo:
 
 Pré-requisitos:
@@ -15,7 +22,7 @@ git clone https://github.com/raphaelcp22/PYGAME
 pip install pygame
 
 3- Execute o jogo:
-python main.py
+PYGAME/Código/main.py
 
 
 Controles:
