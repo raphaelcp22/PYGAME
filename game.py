@@ -1,3 +1,4 @@
+import os
 import pygame
 import sys
 import math
@@ -5,9 +6,8 @@ import random
 from pygame.math import Vector2
 import pygame.gfxdraw  # Partículas em pixel art
 
-# features faltando:
-# contagem de voltas com detecção de linha de chegada
-# tiles de muro ou areia para evitar trapaça
+AUDIO_DIR = 'Áudios'
+IMAGE_DIR = 'Imagens'
 
 # inicia o pygame
 pygame.init()
@@ -26,7 +26,7 @@ ORIGINAL_MAX_SPEED = 8  # pit-stop: valor original da velocidade máxima
 
 # constantes do sistema de voltas
 LAPS_TO_WIN = 10
-LAP_COOLDOWN = 7000 # ms
+LAP_COOLDOWN = 1 # ms
 
 game_state = "intro"
 winner_num = None
@@ -38,11 +38,11 @@ clock = pygame.time.Clock()
 
 # carrega sons
 try:
-    engine_sound = pygame.mixer.Sound('engine.mp3')  # som do motor
-    crash_sound = pygame.mixer.Sound('crash.mp3')    # som de colisão
-    boost_sound = pygame.mixer.Sound('boost.mp3')    # som de turbo
-    lap_sound = pygame.mixer.Sound('lap.mp3')        # som de volta
-    music = pygame.mixer.music.load('race_music.mp3')  # música de fundo
+    engine_sound = pygame.mixer.Sound(os.path.join(AUDIO_DIR, 'engine.mp3'))  # som do motor
+    crash_sound = pygame.mixer.Sound(os.path.join(AUDIO_DIR, 'crash.mp3'))    # som de colisão
+    boost_sound = pygame.mixer.Sound(os.path.join(AUDIO_DIR, 'boost.mp3'))    # som de turbo
+    lap_sound = pygame.mixer.Sound(os.path.join(AUDIO_DIR, 'lap.mp3'))        # som de volta
+    pygame.mixer.music.load(os.path.join(AUDIO_DIR, 'race_music.mp3'))  # música de fundo
     pygame.mixer.music.set_volume(0.5)  # volume mais baixo pra música
     sound_available = True
 except:
@@ -99,7 +99,7 @@ tilemap = [[0 for _ in range(COLS)] for _ in range(ROWS)]
 grass_map = [[0 for _ in range(COLS)] for _ in range(ROWS)]
 
 # carrega foto da pista
-track_mask = pygame.image.load("track_mask3.png").convert()
+track_mask = pygame.image.load(os.path.join(IMAGE_DIR, "track_mask3.png")).convert()
 track_mask = pygame.transform.scale(track_mask, (COLS, ROWS))
 
 for y in range(ROWS):
@@ -251,9 +251,9 @@ class Car(pygame.sprite.Sprite):
     def load_car_image(self, player_num):
         """Carrega imagem do carro baseado no número do jogador"""
         if player_num == 1:
-            car_image = pygame.image.load('scarlet.png').convert_alpha()
+            car_image = pygame.image.load(os.path.join(IMAGE_DIR, 'scarlet.png')).convert_alpha()
         elif player_num == 2:
-            car_image = pygame.image.load('navy.png').convert_alpha()
+            car_image = pygame.image.load(os.path.join(IMAGE_DIR, 'navy.png')).convert_alpha()
         else:
             raise ValueError("Número de jogador inválido")
         car_image = pygame.transform.rotate(car_image, -90)
@@ -566,7 +566,7 @@ def draw_hud(surface, cars):
 def draw_intro(surface):
     '''Função que renderiza a tela de introdução do jogo, mostrando a imagem de fundo e como inicializá-lo'''
     # tela de introdução
-    intro_img = pygame.image.load("intro_screen.png").convert()
+    intro_img = pygame.image.load(os.path.join(IMAGE_DIR, "intro_screen.png")).convert()
     intro_img = pygame.transform.scale(intro_img, (SCREEN_WIDTH, SCREEN_HEIGHT))
     surface.blit(intro_img, (0, 0))
 
@@ -683,7 +683,7 @@ def main():
         if game_state == "winner":
             # bloqueia desenhos normais, só mostra a imagem de vitória
             screen.fill(BLACK)
-            img = pygame.image.load(f"player{winner_num}_win.png").convert_alpha()
+            img = pygame.image.load(os.path.join(IMAGE_DIR, f"player{winner_num}_win.png")).convert_alpha()
             img = pygame.transform.scale(img, (SCREEN_WIDTH, SCREEN_HEIGHT))
             screen.blit(img, (0, 0))
         else:
