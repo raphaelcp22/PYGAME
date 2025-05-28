@@ -26,7 +26,7 @@ ORIGINAL_MAX_SPEED = 8  # pit-stop: valor original da velocidade máxima
 
 # constantes do sistema de voltas
 LAPS_TO_WIN = 10
-LAP_COOLDOWN = 7000  # ms
+LAP_COOLDOWN = 7000 # ms
 
 game_state = "intro"
 winner_num = None
@@ -684,8 +684,8 @@ def main():
             # bloqueia desenhos normais, só mostra a imagem de vitória
             screen.fill(BLACK)
             img = pygame.image.load(f"player{winner_num}_win.png").convert_alpha()
-            img = pygame.transform.scale(img, (400, 300))
-            screen.blit(img, ((SCREEN_WIDTH - img.get_width()) // 2, (SCREEN_HEIGHT - img.get_height()) // 2))
+            img = pygame.transform.scale(img, (SCREEN_WIDTH, SCREEN_HEIGHT))
+            screen.blit(img, (0, 0))
         else:
             if game_state == "intro":
                 draw_intro(screen)
