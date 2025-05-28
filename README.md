@@ -3,11 +3,58 @@ Enrique Pellaes, Lucas Moreira, e Raphael Primo - Engenharia Turma A
 
 Como rodar o jogo:
 
+Pré-requisitos:
+VIsual Studio Code instalado, expansões Pylance, Python, Python Debugger e GitHub Copilot Chat instaladas, e Biblioteca Pygame instalada;
 
 
+Instalação:
+1- Clone o repositório no VSCode:
+git clone https://github.com/raphaelcp22/PYGAME
+
+2-Instale as dependências:
+pip install pygame
+
+3- Execute o jogo:
+python main.py
 
 
+Controles:
+Jogador 1 (Carro Vermelho):
 
+W: Acelerar
+
+S: Frear/Ré
+
+A/D: Virar para esquerda/direita
+
+Shift: Turbo
+
+Jogador 2 (Carro Azul):
+
+Setas: Movimentação
+
+Ctrl: Turbo
+
+
+O Fórmula Insper é um jogo de carro de corrida em pixel art, seguindo uma essência de Fórmula 1 e StockCar. Neste jogo, implementamos um 1v1 local (mesma máquina) de dois carros: o vermelho e o azul. Seja mais veloz e mais inteligente que seu oponente e termine as voltas primeiro.
+
+Principais Características:
+Corrida Multijogador Local: Batalhe contra um amigo na mesma tela
+
+Sistema de Drift Realista: Controle deslizamentos e derrapagens com uma animação lembrando a física real
+
+Pista com curvas, retas e obstáculos
+
+Sistema de Turbo: Gerencie seu boost para ultrapassagens estratégicas, mas há de se tomar cuidado, pois ele é limitado
+
+Mecânicas:
+Sistema de Dano e vida útil do carro: Colisões e contato direto com a grama reduzem sua vida, o que pode modificar sua velocidade máxima
+
+Pit Stop: Área para reparos durante a corrida; Caso tenha perdido sua vida útil, use o Pit Stop, mas com sabedoria, pois é uma área lenta
+
+Efeitos Visuais: Partículas, marcas de derrapagem e efeitos de velocidade e de danificação do carro
+
+Trilha Sonora: Música temática e efeitos sonoros imersivos (som da batida, do turbo e da ignição ao iniciar o carro)
 
 
 Usos de Inteligencia Artificial para desenvolver o jogo: Deepseek, Git Copilot, ChatGPT (implementamos somente imagens)
