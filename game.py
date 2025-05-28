@@ -26,7 +26,7 @@ ORIGINAL_MAX_SPEED = 8  # pit-stop: valor original da velocidade máxima
 
 # constantes do sistema de voltas
 LAPS_TO_WIN = 10
-LAP_COOLDOWN = 100  # ms
+LAP_COOLDOWN = 7000  # ms
 
 game_state = "intro"
 winner_num = None
@@ -404,7 +404,7 @@ class Car(pygame.sprite.Sprite):
             self.velocity *= -0.3
             return
 
-        # Prevent car from leaving the screen
+        # Não deixa o carro sair da tela
         half_w, half_h = self.rect.width // 2, self.rect.height // 2
         new_x = min(max(new_pos.x, half_w), SCREEN_WIDTH - half_w)
         new_y = min(max(new_pos.y, half_h), SCREEN_HEIGHT - half_h)
