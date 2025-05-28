@@ -626,9 +626,15 @@ def main():
                         'right': pygame.K_LEFT,
                         'boost': pygame.K_RCTRL
                     }
-                    start_y = 160  # posição inicial na pista
-                    car1 = Car(TRACK_CENTER[0] - 60, start_y, RED, controls1, 1)
-                    car2 = Car(TRACK_CENTER[0] + 60, start_y, BLUE, controls2, 2)
+                    start_x = 1092  # Centro horizontal
+                    start_y = 255  # Posição vertical ajustada (logo antes da linha de chegada)
+                    spacing = 30  # Espaço entre os carros
+
+                    # Cria os carros virados para cima (ângulo 90 graus)
+                    car1 = Car(start_x - spacing, start_y, RED, controls1, 1)
+                    car1.angle = 90  # Virado para cima
+                    car2 = Car(start_x + spacing, start_y, BLUE, controls2, 2) 
+                    car2.angle = 90  # Virado para cima
                     cars = [car1, car2]
                     game_state = "countdown"
                     last_tick = current_time
