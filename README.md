@@ -64,6 +64,11 @@ Efeitos Visuais: Partículas, marcas de derrapagem e efeitos de velocidade e de 
 Trilha Sonora: Música temática e efeitos sonoros imersivos (som da batida, do turbo e da ignição ao iniciar o carro)
 
 
+Link do vídeo no Youtube, do jogo funcionando e suas mecânicas:
+https://youtu.be/kxz9ZFgJgtg
+
+
+
 Usos de Inteligencia Artificial para desenvolver o jogo: Deepseek, Git Copilot, ChatGPT (implementamos somente imagens)
 
 A função de detecção e resposta à colisão entre os carros, usada no jogo, foi gerada com auxílio de IA em cerca de 90%.  Utilizamos o DeepSeek (não tem histórico do chat disponível) e o prompt utilizado foi: "Estou criando um jogo de Fórmula 1 no Pygame. Quero implementar um sistema de colisão entre os carros que considere tempo de recarga, força do impacto baseada na diferença de velocidade, e gere partículas visuais quando o impacto for forte. Também quero aplicar um empurro (impulso) nos carros e tocar um som de colisão, se o som estiver disponível. Adicione esse trecho de código para mim?" 

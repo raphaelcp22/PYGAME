@@ -16,7 +16,7 @@ CELL_SIZE = 10
 COLS, ROWS = SCREEN_WIDTH // CELL_SIZE, SCREEN_HEIGHT // CELL_SIZE
 COUNTDOWN_TIME = 3
 ORIGINAL_MAX_SPEED = 8
-LAPS_TO_WIN = 10
+LAPS_TO_WIN = 5
 LAP_COOLDOWN = 1 # ms
 FPS = 60
 
@@ -466,7 +466,7 @@ def draw_hud(surface, cars, font_small):
             pygame.draw.rect(surface, (180, 180, 0), (pos_x + seg, 85, 8, 10))
         pygame.draw.rect(surface, WHITE, (pos_x, 85, 100, 10), 1)
         # Contador de voltas
-        lap_text   = font_small.render(f"VOLTAS:{min(car.laps, LAPS_TO_WIN)}/{LAPS_TO_WIN}", True, BLACK)
+        lap_text   = font_small.render(f"VOLTAS:{min(car.laps, LAPS_TO_WIN)}/{LAPS_TO_WIN}", True, RED)
         surface.blit(lap_text, (pos_x, 105))
         # Indicador de velocidade
         speed = int(car.velocity.length() * 20)
