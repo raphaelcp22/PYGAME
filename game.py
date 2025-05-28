@@ -266,7 +266,7 @@ class Car(pygame.sprite.Sprite):
         '''Função responsável por atualizar o carro, verificando potenciais colisões, atualizando a sua atual posição, o carregamento do turbo, e explorar o seu atual estado de vida útil dentro do jogo'''
         # ajustes de velocidade
         if self.health <= 0:
-            self.max_speed = self.original_max_speed * 0.5
+            self.max_speed = self.original_max_speed * 0.35
         elif self.in_pitstop:
             self.max_speed = self.original_max_speed / 3
         else:
@@ -385,7 +385,7 @@ class Car(pygame.sprite.Sprite):
             self.off_track_timer += 1
             self.velocity *= 0.95
             if self.off_track_timer > 60 and self.collision_cooldown == 0:
-                self.health = max(0, self.health - 1)
+                self.health = max(0, self.health - 2)
                 self.collision_cooldown = 10
                 if sound_available and random.random() < 0.1:
                     crash_sound.play()
