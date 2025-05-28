@@ -264,11 +264,13 @@ class Car(pygame.sprite.Sprite):
     
     def update(self, cars):
         '''Função responsável por atualizar o carro, verificando potenciais colisões, atualizando a sua atual posição, o carregamento do turbo, e explorar o seu atual estado de vida útil dentro do jogo'''
-        # Verifica se o carro está sem vida e ajusta a velocidade
+        # ajustes de velocidade
         if self.health <= 0:
-            self.max_speed = self.original_max_speed * 0.5  # 50% da velocidade normal
+            self.max_speed = self.original_max_speed * 0.5
+        elif self.in_pitstop:
+            self.max_speed = self.original_max_speed / 3
         else:
-            self.max_speed = self.original_max_speed  # velocidade normal
+            self.max_speed = self.original_max_speed
 
         keys = pygame.key.get_pressed()
         # Cooldowns
@@ -368,13 +370,13 @@ class Car(pygame.sprite.Sprite):
         cell_y = int(new_pos.y / CELL_SIZE)
         tile = tilemap[cell_y][cell_x] if 0 <= cell_x < COLS and 0 <= cell_y < ROWS else 0
 
-        # --- aplica efeitos do pit-stop ---
+        # efeitos do pit-stop
         if tile == 5:
-            self.health = 100  # cura total
-            self.max_speed = self.original_max_speed * 0.5 if self.health <= 0 else self.original_max_speed  # mantém 50% se sem vida
+            self.health = 100           # cura total
+            self.max_speed = self.original_max_speed / 3  # reduz para 1/3
             self.in_pitstop = True
         elif self.in_pitstop and tile != 5:
-            self.max_speed = self.original_max_speed * 0.5 if self.health <= 0 else self.original_max_speed  # mantém 50% se sem vida
+            self.max_speed = self.original_max_speed      # restaura valor original
             self.in_pitstop = False
 
         # Lógica fora da pista (dano se ficar muito tempo fora)
