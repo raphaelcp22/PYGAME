@@ -32,7 +32,10 @@ game_state = "intro"
 winner_num = None
 
 # dimensões da tela
-screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
+screen = pygame.display.set_mode(
+    (SCREEN_WIDTH, SCREEN_HEIGHT),
+    pygame.FULLSCREEN
+)
 pygame.display.set_caption("Pixel Racer Championship")
 clock = pygame.time.Clock()
 
