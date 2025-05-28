@@ -99,7 +99,7 @@ tilemap = [[0 for _ in range(COLS)] for _ in range(ROWS)]
 grass_map = [[0 for _ in range(COLS)] for _ in range(ROWS)]
 
 # carrega foto da pista
-track_mask = pygame.image.load("track_mask_teste.png").convert()
+track_mask = pygame.image.load("track_mask3.png").convert()
 track_mask = pygame.transform.scale(track_mask, (COLS, ROWS))
 
 for y in range(ROWS):
@@ -256,7 +256,11 @@ class Car(pygame.sprite.Sprite):
             car_image = pygame.image.load('navy.png').convert_alpha()
         else:
             raise ValueError("Número de jogador inválido")
-        return pygame.transform.rotate(car_image, -90)
+        car_image = pygame.transform.rotate(car_image, -90)
+        # reduz tamanho do carro
+        w, h = car_image.get_size()
+        car_image = pygame.transform.smoothscale(car_image, (w / 1.2, h / 1.2))
+        return car_image
     
     def update(self, cars):
         '''Função responsável por atualizar o carro, verificando potenciais colisões, atualizando a sua atual posição, o carregamento do turbo, e explorar o seu atual estado de vida útil dentro do jogo'''
@@ -518,11 +522,14 @@ def draw_track(surface):
                 else:
                     checker_tile.fill(BLACK)
                 surface.blit(checker_tile, (x*CELL_SIZE, y*CELL_SIZE))
-            elif tile == 5:
-                # renderização do pit-stop
+            elif tile == 5:  # pit-stop
                 pygame.draw.rect(surface, BLUE, (x*CELL_SIZE, y*CELL_SIZE, CELL_SIZE, CELL_SIZE))
             elif tile == 6:  # muro
-                pygame.draw.rect(surface, (50, 50, 50), (x*CELL_SIZE, y*CELL_SIZE, CELL_SIZE, CELL_SIZE))
+                stripe_tile = pygame.Surface((CELL_SIZE, CELL_SIZE))
+                for i in range(CELL_SIZE):
+                    color = (0, 0, 0) if (i // 2) % 2 == 0 else (255, 215, 0)
+                    pygame.draw.line(stripe_tile, color, (i, 0), (i, CELL_SIZE - 1))
+                surface.blit(stripe_tile, (x * CELL_SIZE, y * CELL_SIZE))
             elif tile == 7:  # borda
                 pygame.draw.rect(surface, (180, 180, 180), (x*CELL_SIZE, y*CELL_SIZE, CELL_SIZE, CELL_SIZE))
 
