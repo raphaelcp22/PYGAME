@@ -5,6 +5,10 @@ import random
 from pygame.math import Vector2
 import pygame.gfxdraw  # Partículas em pixel art
 
+# features faltando:
+# contagem de voltas com detecção de linha de chegada
+# tiles de muro ou areia para evitar trapaça
+
 # inicia o pygame
 pygame.init()
 
